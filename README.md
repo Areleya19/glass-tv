@@ -38,6 +38,10 @@ at a time, the movie pictures take under 2 MB of storage, and nothing runs while
 
 ## Setting it up
 
+**Using an AI coding agent** (Claude Code, Codex, Cursor, Copilot…)? Point it at this repository and ask it to
+set up your TV. [AGENTS.md](AGENTS.md) tells any agent how to do it safely on any Android TV or Google TV:
+asking before each change, backing up first, never uninstalling, and checking with you as it goes.
+
 Debloating and installing work exactly as in CleanYourTV; its full guide is in
 [docs/CLEANYOURTV-README.md](docs/CLEANYOURTV-README.md), and [PROMPT.md](PROMPT.md) lets a coding assistant do
 it for you. In short:
