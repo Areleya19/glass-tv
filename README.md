@@ -80,6 +80,11 @@ Glass TV clears the TV's caches by itself every 15 days ([how](docs/cache-clean.
 from one computer instead, [`tools/cache-clean.sh`](docs/cache-clean.md) finds the TVs on your network and
 clears their caches, leaving sign-ins and app data untouched.
 
+## LG TVs (webOS)
+
+LG TVs run webOS, which cannot run Android apps. For the full Glass TV, plug in a Google TV or Android TV box.
+A webOS version you open as an app, without debloating, is in preview in [webos/](webos/README.md).
+
 ## Places, or pictures of your own
 
 Places are on from the start. To change how often the picture changes, or to use your own pictures and keep
