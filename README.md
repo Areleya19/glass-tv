@@ -3,10 +3,9 @@
 **Make your Android TV or Google TV fast and ad-free again: strip out the bloat and ads, free up memory,
 and come home to just your apps, with a new place to visit behind them every week.**
 
-Based on [Clean Your TV](https://github.com/Gathin23/cleanyourtv) by Gathin. Not affiliated with it.
-Clean TV keeps everything Clean Your TV does — debloat any Android TV over Wi-Fi, no root, fully reversible,
-and swap the ad-filled home screen for a light Apple TV-style launcher — and adds a home screen that shows a
-new set of places every week.
+Clean TV debloats any Android TV or Google TV over Wi-Fi, with no root and nothing that can't be undone, then
+swaps the ad-filled home screen for a light one in frosted glass, with a new set of places behind your apps
+every week.
 
 <p>
   <img src="docs/screenshots/promo-1-home.jpg" width="32%" alt="Your TV, fast and ad-free again: the TV behind on the left, the app grid behind on the right, Home over Mount Sneffels in front">
@@ -14,7 +13,7 @@ new set of places every week.
   <img src="docs/screenshots/promo-3-clock.jpg" width="32%" alt="Ads off, time on: the clock screensaver">
 </p>
 
-## What Clean TV adds
+## What you get
 
 - **Places to visit that renew themselves.** Once a week the TV takes the pictures Bing has shown on its home
   page over the past days — landmarks, landscapes, wildlife — deletes last week's and rotates through them,
@@ -62,7 +61,7 @@ set up your TV. [AGENTS.md](AGENTS.md) tells any agent, even a small model, how 
 TV: it first checks that your TV can run it (Samsung, LG, Roku and Fire TV can't run the home screen), then
 asks before each change, backs up first, never uninstalls, and checks each step with you as it goes.
 
-Debloating and installing work exactly as in CleanYourTV; its full guide is in
+The full step-by-step guide for debloating and installing is in
 [docs/CLEANYOURTV-README.md](docs/CLEANYOURTV-README.md), and [PROMPT.md](PROMPT.md) lets a coding assistant do
 it for you. In short:
 
