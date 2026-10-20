@@ -1,14 +1,14 @@
-# Layar
+# Clean Your TV — with movie wallpapers
 
-**A calm, movie-lit home screen for Android TV and Google TV.** *Layar* is Malay for "screen".
+**A calm, movie-lit home screen for Android TV and Google TV.**
 
-Layar is a fork of [CleanYourTV](https://github.com/Gathin23/cleanyourtv) by Gathin. It keeps everything
-CleanYourTV does — debloat any Android TV over Wi-Fi, no root, fully reversible, and swap the ad-filled home
+This is cocombee's fork of [CleanYourTV](https://github.com/Gathin23/cleanyourtv) by Gathin, not the
+official project. It keeps everything CleanYourTV does — debloat any Android TV over Wi-Fi, no root, fully reversible, and swap the ad-filled home
 screen for a light Apple TV-style launcher — and adds a home screen that changes with the films that are out now.
 
 ![Home screen with a movie wallpaper](docs/screenshots/home-movie.jpg)
 
-## What Layar adds
+## What this fork adds
 
 - **Movie wallpapers that update themselves.** Once a day the TV asks [TMDB](https://www.themoviedb.org) for
   the 10 most popular films of the last 75 days, downloads their backdrops, deletes the old ones and rotates
@@ -65,7 +65,7 @@ tools/theme.sh themes/<your theme>                            # push your settin
 ```
 
 `movie_genres` `16|10751` means animation *or* family; leave it out for every genre. All keys are listed in
-[themes/README.md](themes/README.md). Without a key, Layar never goes online.
+[themes/README.md](themes/README.md). Without a key, the launcher never goes online.
 
 ## Credits and licence
 
