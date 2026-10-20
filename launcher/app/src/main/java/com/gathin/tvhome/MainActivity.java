@@ -1390,7 +1390,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     .setDataAndType(TvContract.buildChannelUriForPassthroughInput(tunerId), "vnd.android.cursor.item/channel")
                     .setPackage(liveTvPkg);
         }
-        if (liveTv != null) {
+        if (liveTv != null && config.showLiveTv) {
             if (rows.getChildCount() > 0) addSeparator(rows);
             final Intent liveTvIntent = liveTv;
             addInputRow(rows, popup, R.drawable.ic_livetv, getString(R.string.live_tv), -1, () -> open(liveTvIntent));
@@ -1405,6 +1405,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         popup.setWidth(Math.max(width, panel.getMeasuredWidth()));
 
         glideBetweenRows((FrameLayout) panel, rows);
+        // Up from the first row closes the menu and goes back to the Inputs pill, which never lost
+        // its place underneath.
+        for (int i = 0; i < rows.getChildCount(); i++) {
+            View first = rows.getChildAt(i);
+            if (!first.isFocusable()) continue;
+            first.setOnKeyListener((v, keyCode, event) -> {
+                if (keyCode != KeyEvent.KEYCODE_DPAD_UP) return false;
+                if (event.getAction() == KeyEvent.ACTION_DOWN) popup.dismiss();
+                return true;
+            });
+            break;
+        }
         dropIn(popup, panel, anchor, Gravity.START);
         rows.getChildAt(0).requestFocus();
     }

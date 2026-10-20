@@ -36,6 +36,7 @@ is ignored, and a file that doesn't parse is ignored as a whole, so a theme can 
 | `vpn_app` | string | App the network pill opens when a VPN is configured; also shows a red "VPN off" badge while no VPN is up |
 | `show_home_settings_shortcut` | bool | The "Default home" tile, where the TV has a home picker |
 | `show_network_pill` | bool | The Wi-Fi / Ethernet pill in the top bar; `false` hides it |
+| `show_live_tv` | bool | The Live TV row in the Inputs menu; `false` leaves only the HDMI and AV inputs |
 | `background_color` | `#RRGGBB` | Colour behind everything; black by default |
 | `wallpaper` | bool | Show `wallpaper.jpg` from the theme folder (`true`), or ignore it (`false`) |
 | `wallpaper_minutes` | 0 to 1440 | Minutes between pictures when the theme has a `wallpapers/` folder; 0 changes only when Home starts. Default 30 |

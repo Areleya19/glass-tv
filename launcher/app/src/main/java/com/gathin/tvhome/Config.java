@@ -50,6 +50,8 @@ final class Config {
     final boolean showHomeSettingsShortcut;
     /** The Wi-Fi / Ethernet pill in the top bar (config.xml, show_network_pill). */
     final boolean showNetworkPill;
+    /** The Live TV row in the Inputs menu (config.xml, show_live_tv). */
+    final boolean showLiveTv;
     /** Background colour behind everything, #RRGGBB; black unless a theme says otherwise. */
     final int backgroundColor;
     /** Full-screen picture behind the launcher, or null for the plain colour. */
@@ -69,7 +71,8 @@ final class Config {
                    String sourcePanelService, String sourcePanelAction, String inputAction,
                    int columns, int rowsBelowDock,
                    boolean shamsiDate, boolean moduleCards, boolean reducedMotion, String vpnApp,
-                   boolean showHomeSettingsShortcut, boolean showNetworkPill, int backgroundColor,
+                   boolean showHomeSettingsShortcut, boolean showNetworkPill, boolean showLiveTv,
+                   int backgroundColor,
                    File wallpaper, List<File> wallpapers, long wallpaperIntervalMs,
                    String tmdbApiKey, String movieRegion, String movieGenres, String movieExcludedGenres,
                    boolean overlayApplied) {
@@ -88,6 +91,7 @@ final class Config {
         this.vpnApp = vpnApp;
         this.showHomeSettingsShortcut = showHomeSettingsShortcut;
         this.showNetworkPill = showNetworkPill;
+        this.showLiveTv = showLiveTv;
         this.backgroundColor = backgroundColor;
         this.wallpaper = wallpaper;
         this.wallpapers = Collections.unmodifiableList(wallpapers);
@@ -121,6 +125,7 @@ final class Config {
         String vpn = res.getString(R.string.vpn_app).trim();
         boolean homeSettings = res.getBoolean(R.bool.show_home_settings_shortcut);
         boolean networkPill = res.getBoolean(R.bool.show_network_pill);
+        boolean liveTvRow = res.getBoolean(R.bool.show_live_tv);
         int background = 0xFF000000;
         boolean applied = false;
 
@@ -144,6 +149,7 @@ final class Config {
             vpn = string(json, "vpn_app", vpn);
             homeSettings = bool(json, "show_home_settings_shortcut", homeSettings);
             networkPill = bool(json, "show_network_pill", networkPill);
+            liveTvRow = bool(json, "show_live_tv", liveTvRow);
             background = color(json, "background_color", background);
         }
         File wallpaper = dir != null ? new File(dir, WALLPAPER_NAME) : null;
@@ -170,7 +176,7 @@ final class Config {
 
         return new Config(dock, hidden, liveTv, liveTvAction, panelService, panelAction, inputAction,
                 Math.max(1, columns), Math.max(0, rowsBelow), shamsi, moduleCards, reducedMotion,
-                vpn, homeSettings, networkPill, background, wallpaper, wallpapers, wallpaperIntervalMs,
+                vpn, homeSettings, networkPill, liveTvRow, background, wallpaper, wallpapers, wallpaperIntervalMs,
                 tmdbKey, movieRegion, movieGenres, movieExcluded, applied);
     }
 
