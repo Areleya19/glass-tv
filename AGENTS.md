@@ -1,12 +1,46 @@
 # Instructions for AI agents
 
-You are helping someone set up **Clean TV** on their own Android TV or Google TV: debloat it, install this
-launcher as the home screen, with pictures of places behind it. This file is the playbook. It works for
-any brand (Xiaomi, TCL, Sony, Hisense, Philips, OnePlus, NVIDIA Shield, Chromecast, projectors…). Follow it in
-order, and read [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) before you improvise a fix.
+You are helping someone set up **Clean TV** on their own TV: debloat it, install this launcher as the home
+screen, with pictures of places behind it. This file is the playbook. It is written for any brand and for any
+AI model, large or small. Follow it in order, and read [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
+before you improvise a fix.
 
-It does **not** work on Samsung (Tizen), LG (webOS) or other non-Android TVs. On Fire TV only the debloat half
-works, because Fire OS will not hand Home to another launcher.
+## Will it work on this TV?
+
+Ask the person for the TV's brand and model, and what the Settings → About screen says. Then use this table.
+It is the operating system that matters, not the brand: Hisense, Panasonic, Toshiba, TCL and Philips sell both
+kinds.
+
+| The TV or box runs | Debloat | Clean TV home screen |
+|---|---|---|
+| **Android TV or Google TV, Android 8 or newer** (Sony, TCL, Xiaomi, Philips, many Hisense, Sharp, OnePlus, NVIDIA Shield, Chromecast with Google TV, Mi Box, Android projectors…) | yes | yes |
+| Android TV 5, 6 or 7 | yes | no: the launcher needs Android 8 |
+| Fire TV (Amazon sticks, Fire TV Edition TVs) | yes | no: Fire OS takes Home back from any other launcher |
+| Samsung (Tizen), LG (webOS), Roku, VIDAA, Vizio SmartCast, Panasonic My Home Screen, Apple TV | no | no: these can't run Android apps |
+
+If the answer is **no**, say so plainly and stop. Don't look for workarounds. After connecting (step 1), confirm
+it: `ro.build.version.sdk` must be **26 or higher** for the launcher.
+
+The launcher adapts by itself to everything else: 720p, 1080p and 4K screens, TVs with or without HDMI inputs
+or a tuner (sticks and boxes just show fewer inputs), any language. On a weak TV (1 GB of RAM, or the selection
+stutters) set `"reduced_motion": true` in the theme (step 6).
+
+## How to follow this playbook
+
+Written so that any model can follow it to the letter:
+
+- Do the steps in order, one at a time. Don't skip ahead or merge steps.
+- Run **one command per shell call** and read its output before the next one.
+- Every step ends with a **Check**. If the check fails, stop. Look the message up in
+  [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md); if it isn't there, tell the person exactly what you saw.
+  Never invent a fix that disables, uninstalls, resets or restarts something.
+- Replace every `<ip>`, `<pkg>`, `<folder>` with a real value. Never run a line that still contains `<` `>`.
+- Ask the person questions they can answer with yes/no or by reading the TV screen. Never ask them to type
+  commands.
+- Write every command that changes the TV into `backup/log.txt`, so all of it can be undone.
+- Commands here are for macOS and Linux. On Windows use the `.ps1` script of the same name (`tools\disable.ps1`,
+  `tools\theme.ps1`, `launcher\build-and-install.ps1`); see [docs/CLEANYOURTV-README.md](docs/CLEANYOURTV-README.md).
+- When unsure, the answer is always: leave it as it is and ask.
 
 ## Ground rules
 
@@ -43,11 +77,15 @@ works, because Fire OS will not hand Home to another launcher.
   home Wi-Fi. Some TVs show **Wireless debugging** with a pairing code instead; ask the person for the code
   and the `ip:port`, then `adb pair`.
 - Ask for the TV's IP address (Settings → Network & Internet → the Wi-Fi network).
-- Connect: `adb connect <ip>:5555`. When the "Allow USB debugging?" prompt appears on the TV, tell the person
-  to tick **Always allow** and press OK.
-- If macOS says "No route to host" while the port is open, use the Python client instead:
-  `python3 -m venv tools/venv && tools/venv/bin/pip install -r tools/requirements.txt`, then
-  `TV_HOST=<ip> tools/venv/bin/python -I tools/tv.py --probe`.
+- Set up the Python client once (all the scripts use it; no `adb` program is needed):
+  `python3 -m venv tools/venv && tools/venv/bin/pip install -r tools/requirements.txt`
+- Connect: `TV_HOST=<ip> tools/venv/bin/python -I tools/tv.py --probe`. When the "Allow USB debugging?"
+  prompt appears on the TV, tell the person to tick **Always allow** and press OK, then run it again.
+- **Check**: it prints six lines, `ro.product.model = …` through `ro.product.manufacturer = …`. A timeout or
+  "connection refused" means debugging is off or the IP is wrong: see TROUBLESHOOTING, "Connecting".
+  Note `ro.build.version.sdk`: below 26, stop after step 3 (debloat only).
+- To run any shell command on the TV: `TV_HOST=<ip> tools/venv/bin/python -I tools/tv.py '<command>'`.
+  Using `adb` instead is fine where it works (`adb connect <ip>:5555`, then `adb shell '<command>'`).
 
 ### 2. Identify the TV and back up
 
@@ -55,6 +93,7 @@ works, because Fire OS will not hand Home to another launcher.
   [examples/](examples/): its `debloat.txt` is a tested list, and its header names packages that must stay.
 - Do the backup from rule 3. Also note `cmd package query-activities --brief -a android.intent.action.MAIN
   -c android.intent.category.HOME`: every app that can claim Home.
+- **Check**: the backup files exist in `backup/` and none is empty.
 
 ### 3. Debloat
 
@@ -64,6 +103,9 @@ works, because Fire OS will not hand Home to another launcher.
   apps and streaming apps, and propose a list. Only the first three are candidates without asking.
 - Run `pm` commands one per shell call; chained commands can silently stop after the first.
 - Keep the stock launcher's packages until step 5.
+- **Check** after every batch: the person presses Home and the TV's own home screen still opens, the remote
+  works, Wi-Fi is connected, and an HDMI input still shows a picture. If anything broke, re-enable that batch's
+  packages one by one (`pm enable <pkg>`) before going on.
 
 ### 4. Build the launcher
 
@@ -76,18 +118,23 @@ works, because Fire OS will not hand Home to another launcher.
   apps go in the dock and in what order, using the package names from `pm list packages -3`.
 - Build: `cd launcher && ./gradlew testReleaseUnitTest assembleRelease`. The APK must stay under 400 KB
   (CI checks it).
+- **Check**: `launcher/app/build/outputs/apk/release/app-release.apk` exists and is about 300 KB.
 
 ### 5. Install and make it Home
 
 - `TV_HOST=<ip> launcher/build-and-install.sh`. It installs, starts the launcher, disables the stock launcher
   only after the new one is running, sets the home activity, and puts the stock one back if Home lands
   elsewhere.
-- Before that, disable any other app that claims Home at the same priority as a third-party launcher (on
-  Xiaomi, the factory test app `com.duokan.factorytest`), or the Home button can land on it.
+- Before that, look at the Home list from step 2. Disable any other app there that is neither the stock
+  launcher nor this one, after asking (on Xiaomi the factory test app `com.duokan.factorytest`), or the Home
+  button can land on it.
 - On Google TV the setup wizard (`com.google.android.tungsten.setupwraith`) can take Home; see the
   troubleshooting guide.
 - After the stock launcher is gone, its recommendation services (`tvrecommendations`, `leanbacklauncher*`)
   can be disabled too.
+- **Check**: the script prints `Home now resolves to com.gathin.tvhome/…` and ends with `Installed. Press Home
+  on the remote to see it.` A line starting with `ERROR:` means it stopped and already put the stock launcher
+  back; the message says what to do next.
 
 ### 6. Settings and wallpapers (themes)
 
@@ -105,12 +152,16 @@ A theme is a folder with `config.json` (and optional `wallpaper.jpg` or `wallpap
 
 - `dock_apps` beyond the dock's size continue as the first grid rows, in order, so the person can order the
   grid too.
-- **Places**: on by default, nothing to set up; `"places": false` uses the theme's own pictures and keeps the
-  launcher offline.
+- **Places**: on by default, nothing to set up. The first week's pictures arrive within a minute of Home first
+  starting with internet; until then the background is plain. `"places": false` uses the theme's own pictures
+  and keeps the launcher offline.
+- **App order**: the person can arrange the apps themselves on the TV (hold OK on an app → Move); once they
+  have, their order wins over `dock_apps`.
 - **Android 10 quirk**: the first time the launcher gains the internet permission, sockets fail with `EPERM`
   until the TV restarts. Ask before restarting it.
 - Point the screensaver at the launcher's clock before disabling the stock screensaver:
   `settings put secure screensaver_components com.gathin.tvhome/.ClockDream`.
+- **Check**: Home restarts within a few seconds with the new settings.
 
 ### 7. Verify and hand over
 
@@ -119,7 +170,7 @@ A theme is a folder with `config.json` (and optional `wallpaper.jpg` or `wallpap
 - Check: Home is the new launcher (`cmd package resolve-activity --brief -c android.intent.category.HOME -a
   android.intent.action.MAIN`), System UI and the TV service are running, the dock and grid show the apps.
 - Ask the person to try with the real remote: Home button, Inputs → an HDMI device, playing a video, the mic
-  button, screen mirroring.
+  button, screen mirroring, and holding OK on an app to move it.
 - Give them: the restore script (re-enables everything and puts the stock launcher back), where the theme
   folder is, and a reminder to switch USB debugging off when done.
 - Offer to switch off firmware updates only after explaining the trade-off: updates can bring the bloat back,

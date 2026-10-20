@@ -19,13 +19,25 @@ new set of places every week.
 - **Rotating wallpapers of your own** instead, with `"places": false`: put pictures in a theme's `wallpapers/`
   folder and choose how often they change, down to every 5 seconds. Each picture is decoded in the background
   and cross-faded.
-- **Glass everywhere.** The dock band and the Inputs panel are frosted glass, like the top-bar buttons.
-- **Rows feather out under the top bar** instead of being cut off when you scroll.
-- **A calmer highlight.** The glass highlight glides onto a tile and stops, with no bounce, hugs the tile's
-  corners exactly, and the focus zoom is a gentler 7 %.
-- **Smooth colour.** The glow behind the dock blends straight from one app's colour to the next.
-- **A tidier top bar.** Hide the Wi-Fi / Ethernet button (`show_network_pill`); the Inputs menu has outline
-  HDMI icons and better-sized AV and Live TV icons.
+- **Glass, like Apple's.** The dock's tray, the top-bar buttons and the menus show the picture behind them
+  softened, with a shine along their edges. Android 10 has no live blur, so the picture is blurred once each
+  time it changes and the glass draws its patch of it.
+- **One selection that glides.** Between apps it is a pane of glass with the app's shadow under it; on the top
+  bar and in the menus it is dark. It glides and changes shape from one to the next, never jumps.
+- **Every app tints the room.** The glow behind Home, and the glass with it, blends to the colour of whichever
+  app is selected.
+- **Arrange your apps from the remote.** Hold OK on an app for a glass menu with **Move** and **App info**.
+  Move picks the app up: it wiggles, the arrows carry it (into or out of the dock too) and the other apps
+  slide aside; OK puts it down. The order is kept, and apps installed later join at the end.
+- **An Inputs menu in glass.** The selection glides out of the Inputs button into the list of HDMI and AV
+  inputs, and Up from the top of the list glides it back.
+- **Comes back as you left it.** Back from an app, the app you left is still selected; pressing Home on Home
+  goes to the first app. When Android has closed Home to free memory, it comes back whole in one frame,
+  with no black screen and no half-built dock.
+- **A clock screensaver.** A grey analog dial with a yellow-orange second hand that ticks, the time and
+  date beneath, drifting a little each minute so nothing burns in.
+- **Rows feather out under the top bar** instead of being cut off when you scroll, and the Wi-Fi / Ethernet
+  button can be hidden (`show_network_pill`).
 
 | | |
 |---|---|
@@ -34,14 +46,16 @@ new set of places every week.
 | ![Home screen with a night-sky wallpaper of your own](docs/screenshots/home-night-sky.jpg) | |
 | *Your own wallpaper, with the network button hidden* | |
 
-Still light: on a Xiaomi Mi TV with 1.8 GB of RAM the launcher uses about 65–80 MB, one wallpaper is in memory
-at a time, the movie pictures take under 2 MB of storage, and nothing runs while you are inside an app.
+Still light: on a Xiaomi Mi TV with 1.8 GB of RAM the launcher uses about 80–100 MB and stays there over hours
+of use, one wallpaper is in memory at a time, the week's places take about 2 MB of storage, and nothing runs
+while you are inside an app.
 
 ## Setting it up
 
 **Using an AI coding agent** (Claude Code, Codex, Cursor, Copilot…)? Point it at this repository and ask it to
-set up your TV. [AGENTS.md](AGENTS.md) tells any agent how to do it safely on any Android TV or Google TV:
-asking before each change, backing up first, never uninstalling, and checking with you as it goes.
+set up your TV. [AGENTS.md](AGENTS.md) tells any agent, even a small model, how to do it safely on any Android TV or Google
+TV: it first checks that your TV can run it (Samsung, LG, Roku and Fire TV can't run the home screen), then
+asks before each change, backs up first, never uninstalls, and checks each step with you as it goes.
 
 Debloating and installing work exactly as in CleanYourTV; its full guide is in
 [docs/CLEANYOURTV-README.md](docs/CLEANYOURTV-README.md), and [PROMPT.md](PROMPT.md) lets a coding assistant do
