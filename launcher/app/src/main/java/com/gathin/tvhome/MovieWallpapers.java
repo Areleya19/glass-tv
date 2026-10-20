@@ -84,6 +84,9 @@ final class MovieWallpapers {
             StringBuilder q = new StringBuilder("https://api.themoviedb.org/3/discover/movie?include_adult=false"
                     + "&sort_by=popularity.desc&vote_count.gte=20&primary_release_date.gte=" + from
                     + "&primary_release_date.lte=" + to + "&without_genres=" + enc(excluded));
+            // The title and the overview come back in the TV's own language when TMDB has them,
+            // and in English where it does not, which is the same fallback TMDB's own apps use.
+            q.append("&language=").append(enc(Locale.getDefault().toLanguageTag()));
             if (!cfg.movieRegion.isEmpty()) q.append("&region=").append(enc(cfg.movieRegion));
             if (!cfg.movieGenres.isEmpty()) q.append("&with_genres=").append(enc(cfg.movieGenres));
             boolean bearer = cfg.tmdbApiKey.length() > 40;   // v4 read access token; a v3 key is 32 characters
@@ -106,6 +109,8 @@ final class MovieWallpapers {
                 n++;
                 // w1280 is plenty for a blurred backdrop, and a quarter of the original's pixels on a 1 GB TV.
                 download(d, base + ".jpg", "https://image.tmdb.org/t/p/w1280" + backdrop, wanted);
+                // The shelf names the film, so keep the two fields it shows: title first, overview after.
+                saveText(d, base + ".txt", m.optString("title", ""), m.optString("overview", ""), wanted);
             }
             if (n == 0) return false;
             // Pictures that dropped out of the list, and leftovers of an interrupted download.
@@ -130,6 +135,42 @@ final class MovieWallpapers {
             os.write(img);
         }
         if (!tmp.renameTo(out)) tmp.delete();
+    }
+
+    /** Title and overview beside the picture, so the shelf costs no network call of its own. */
+    private static void saveText(File d, String name, String title, String overview, Set<String> wanted) {
+        wanted.add(name);
+        if (title.isEmpty()) return;
+        File out = new File(d, name);
+        if (out.isFile() && out.length() > 0) return;
+        // One line each, so a stray newline in the overview cannot be read back as a title.
+        String body = title.replace('\n', ' ') + "\n" + overview.replace('\n', ' ');
+        try (OutputStream os = new FileOutputStream(out)) {
+            os.write(body.getBytes(StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            Log.w(TAG, "could not save " + name + ": " + e);
+        }
+    }
+
+    /**
+     * The film's title and overview for a picture this class saved, or null when there is none:
+     * the user's own wallpapers have no sidecar, and neither do pictures kept from an older version.
+     */
+    static String[] describe(File picture) {
+        if (picture == null) return null;
+        String name = picture.getName();
+        if (!name.endsWith(".jpg")) return null;
+        File text = new File(picture.getParentFile(), name.substring(0, name.length() - 4) + ".txt");
+        if (!text.isFile() || text.length() == 0 || text.length() > 8192) return null;
+        try (java.io.BufferedReader r = new java.io.BufferedReader(
+                new java.io.InputStreamReader(new java.io.FileInputStream(text), StandardCharsets.UTF_8))) {
+            String title = r.readLine();
+            if (title == null || title.trim().isEmpty()) return null;
+            String overview = r.readLine();
+            return new String[]{title.trim(), overview == null ? "" : overview.trim()};
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static byte[] get(String url, String bearer, int maxBytes) throws Exception {

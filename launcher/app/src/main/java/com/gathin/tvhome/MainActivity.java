@@ -87,9 +87,24 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private FrameLayout root;
     private GlassView glass;
     private View ambient;
+    /** How much of the space between the side paddings the top shelf may use. */
+    private static final float HERO_WIDTH_SHARE = 0.40f;
+    private static final float HERO_TITLE_MAX_SP = 48f;
+    /** The breathing room between the shelf's last line and the top of the app container. */
+    private static final float HERO_GAP_DP = 52f;
+    private static final float HERO_TITLE_MIN_SP = 26f;
+    /** The shelf's width in pixels, worked out once from the screen. */
+    private int heroMaxWidth;
+    private View heroShelf;
     private TextView heroName;
+    private TextView heroDesc;
+    /** The film on screen, when its picture came with a sidecar; null for the user's own wallpapers. */
+    private String movieTitle;
+    private String movieOverview = "";
     private int ambientColor = -1;
     private boolean heroShown;
+    /** Where the shelf's bottom edge belongs; its top follows once the lines have been measured. */
+    private float heroBottom;
     private TextView greeting;
     private View btnInputs;
     private TextView btnWifi;
@@ -219,7 +234,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         else if (cfg.wallpaper != null) setWallpaper(decodeWallpaper(cfg.wallpaper), false);
         glass = findViewById(R.id.glass);
         ambient = findViewById(R.id.ambient);
+        heroShelf = findViewById(R.id.heroShelf);
         heroName = findViewById(R.id.heroName);
+        heroDesc = findViewById(R.id.heroDesc);
+        // A share of the space between the side paddings, so the description wraps into a column
+        // rather than running the width of the screen. The title is one line and follows the same cap.
+        int usable = getResources().getDisplayMetrics().widthPixels - (int) ((68 + 56) * density);
+        heroMaxWidth = Math.round(usable * HERO_WIDTH_SHARE);
+        heroName.setMaxWidth(heroMaxWidth);
+        heroDesc.setMaxWidth(heroMaxWidth);
+        // The shelf grows and shrinks with the name and the description, so it hangs from its
+        // bottom edge: every time it is measured, its top is worked out again. Positioning it by
+        // the height it happened to have beforehand is what let a tall block run into the dock.
+        heroShelf.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, orr, ob) -> {
+            if (heroBottom > 0) v.setY(heroBottom - v.getHeight());
+        });
         greeting = findViewById(R.id.greeting);
         btnWifi = findViewById(R.id.btnWifi);
         if (!cfg.showNetworkPill) btnWifi.setVisibility(View.GONE);
@@ -467,6 +496,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         prefs.edit().putInt("index", next).apply();
         wallShownAt = android.os.SystemClock.elapsedRealtime();
         final File file = wallpapers.get(next);
+        // Name the film before the picture is decoded: the sidecar is a few bytes, while waiting
+        // for the decode would show the fallback name at full size and shrink it a moment later.
+        setMovie(file);
         wallDecoder.execute(() -> {
             android.graphics.Bitmap bmp = movieMode ? centreOnSubject(decodeWallpaper(file)) : decodeWallpaper(file);
             handler.post(() -> {
@@ -557,7 +589,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             glassShown = false;
             glass.setAlpha(0f);
             heroShown = false;
-            heroName.setAlpha(0f);
+            heroShelf.setAlpha(0f);
             ambient.setAlpha(0f);
         }
         reloadTiles();
@@ -704,19 +736,23 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     // ---- top shelf -------------------------------------------------------------------------------
 
     private void showHero(int position, float dockTopInRoot) {
-        String label = adapter.labelAt(position);
+        // The film the picture is of, when there is one; the app's own name is the fallback for
+        // the user's own wallpapers, which carry no title.
+        final String label = movieTitle != null ? movieTitle : adapter.labelAt(position);
+        final String desc = movieTitle != null ? movieOverview : "";
         int color = adapter.ambientColorAt(position);
-        float y = dockTopInRoot - 14 * density - 26 * density - heroName.getHeight();
+        heroBottom = dockTopInRoot - HERO_GAP_DP * density;
+        float y = heroBottom - heroShelf.getHeight();
         boolean changed = !label.contentEquals(heroName.getText());
 
         if (reducedMotion) {
             // Snap the shelf instead of sliding and fading it: each of those frames repaints the
             // full-screen panel, and this switch exists for the GPUs that cannot afford it.
-            heroName.animate().cancel();
-            heroName.setText(label);
-            heroName.setY(y);
-            heroName.setTranslationX(0f);
-            heroName.setAlpha(1f);
+            heroShelf.animate().cancel();
+            setHeroText(label, desc);
+            heroShelf.setY(y);
+            heroShelf.setTranslationX(0f);
+            heroShelf.setAlpha(1f);
             setAmbient(color);
             if (!heroShown) {
                 ambient.setAlpha(0f);
@@ -727,25 +763,88 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
 
         if (!heroShown) {
-            heroName.setText(label);
-            heroName.setY(y);
-            heroName.setTranslationX(0f);
-            heroName.animate().alpha(1f).setDuration(260).start();
+            setHeroText(label, desc);
+            heroShelf.setY(y);
+            heroShelf.setTranslationX(0f);
+            heroShelf.animate().alpha(1f).setDuration(260).start();
             setAmbient(color);
             ambient.animate().alpha(1f).setDuration(600).start();
             heroShown = true;
         } else if (changed) {
-            heroName.animate().alpha(0f).translationX(-12 * density).setDuration(120).withEndAction(() -> {
-                heroName.setText(label);
-                heroName.setY(y);
-                heroName.setTranslationX(12 * density);
-                heroName.animate().alpha(1f).translationX(0f).setDuration(200).start();
+            heroShelf.animate().alpha(0f).translationX(-12 * density).setDuration(120).withEndAction(() -> {
+                setHeroText(label, desc);
+                heroShelf.setY(y);
+                heroShelf.setTranslationX(12 * density);
+                heroShelf.animate().alpha(1f).translationX(0f).setDuration(200).start();
             }).start();
             // Blend straight from this app's colour to the next one, with no dip to plain in between.
             if (color != ambientColor) setAmbient(color, true);
         } else {
-            heroName.setY(y);
+            heroShelf.setY(y);
         }
+    }
+
+    /** The shelf's two lines. An empty description takes no room, so the title keeps its place. */
+    private void setHeroText(String title, String desc) {
+        heroName.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, titleSizeSp(title));
+        heroName.setText(title);
+        heroDesc.setText(desc);
+        heroDesc.setVisibility(desc.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
+    /**
+     * Shouting titles are calmed down: "THE RIBBON HERO" becomes "The Ribbon Hero". A title that
+     * already has lower case is left exactly as its studio wrote it, so "LEGO Star Wars" and
+     * "WALL·E" keep their capitals instead of being flattened to "Lego" and "Wall·e".
+     */
+    private static String titleCase(String title) {
+        if (title == null || title.isEmpty()) return title;
+        for (int i = 0; i < title.length(); i++) {
+            if (Character.isLowerCase(title.charAt(i))) return title;
+        }
+        StringBuilder out = new StringBuilder(title.length());
+        boolean start = true;
+        for (int i = 0; i < title.length(); i++) {
+            char c = title.charAt(i);
+            out.append(start ? Character.toUpperCase(c) : Character.toLowerCase(c));
+            // A new word begins after a space or any of the marks a title tends to use.
+            start = c == ' ' || c == '-' || c == ':' || c == '.' || c == '\'' || c == '(' || c == '/';
+        }
+        return out.toString();
+    }
+
+    /**
+     * The largest size at which the name still fits the shelf's two lines. Film names run far
+     * longer than app names ("LEGO Star Wars: The Mandalorian"), and a name cut short tells the
+     * viewer nothing, so a long one is set smaller rather than clipped.
+     */
+    private float titleSizeSp(String title) {
+        if (title == null || title.isEmpty() || heroMaxWidth <= 0) return HERO_TITLE_MAX_SP;
+        android.text.TextPaint paint = new android.text.TextPaint(heroName.getPaint());
+        float scaled = getResources().getDisplayMetrics().scaledDensity;
+        for (float sp = HERO_TITLE_MAX_SP; sp > HERO_TITLE_MIN_SP; sp -= 2f) {
+            paint.setTextSize(sp * scaled);
+            android.text.StaticLayout laid = android.text.StaticLayout.Builder
+                    .obtain(title, 0, title.length(), paint, heroMaxWidth).build();
+            if (laid.getLineCount() <= 2) return sp;
+        }
+        return HERO_TITLE_MIN_SP;
+    }
+
+    /**
+     * Follows the rotation: the shelf names whichever film is on screen. Called after the picture
+     * changes, so the words and the picture never disagree.
+     */
+    private void setMovie(File picture) {
+        String[] about = movieMode ? MovieWallpapers.describe(picture) : null;
+        String title = about != null ? titleCase(about[0]) : null;
+        String overview = about != null ? about[1] : "";
+        if (title == null ? movieTitle == null : title.equals(movieTitle)) return;
+        movieTitle = title;
+        movieOverview = overview;
+        // Redraw in place when the shelf is already up; the layout listener puts it back where it
+        // belongs once the new lines have been measured.
+        if (heroShown && title != null) setHeroText(title, overview);
     }
 
     /**
@@ -795,7 +894,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private void hideHero() {
         if (!heroShown) return;
         heroShown = false;
-        heroName.animate().alpha(0f).setDuration(reducedMotion ? 100 : 160).start();
+        heroShelf.animate().alpha(0f).setDuration(reducedMotion ? 100 : 160).start();
         ambient.animate().alpha(0f).setDuration(reducedMotion ? 140 : 300).start();
     }
 
