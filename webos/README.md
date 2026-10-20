@@ -1,7 +1,5 @@
 # Glass TV for LG webOS (preview)
 
-The same app also runs on Samsung TVs (Tizen): see [../tizen](../tizen/README.md).
-
 LG TVs run webOS, not Android, so the Android launcher cannot run on them. This folder is Glass TV's Home
 rebuilt as a webOS web app: the clock row, a new place to visit behind your apps every week, the glass dock
 and buttons, the selection that glides between them, the room taking the selected app's colour, and the
@@ -32,6 +30,7 @@ and the command-line tools (`npm install -g @webos-tools/cli`).
 ares-launch -s 26 -sp <path to webOS_TV_26_Simulator> webos      # in the simulator
 ```
 
+Developer Mode differs between LG models and webOS versions; look up the steps for the exact model first.
 On a real LG TV: install **Developer Mode** from the LG Content Store, sign in with a free LG developer
 account, switch Dev Mode on, then:
 

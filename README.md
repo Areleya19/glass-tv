@@ -61,8 +61,8 @@ while you are inside an app.
 
 **Using an AI coding agent** (Claude Code, Codex, Cursor, Copilot…)? Point it at this repository and ask it to
 set up your TV. [AGENTS.md](AGENTS.md) tells any agent, even a small model, how to do it safely on any Android TV or Google
-TV: it first works out which Glass TV your TV can run (the Android launcher, the LG or Samsung app, or none on
-Roku), then
+TV: it first works out which Glass TV your TV can run (the Android launcher, the LG webOS app, or neither on
+Samsung and Roku), then
 asks before each change, backs up first, never uninstalls, and checks each step with you as it goes.
 
 The full step-by-step guide for debloating and installing is in
@@ -83,9 +83,10 @@ clears their caches, leaving sign-ins and app data untouched.
 
 ## LG and Samsung TVs
 
-LG TVs run webOS and Samsung TVs run Tizen; neither can run Android apps. For the full Glass TV, plug in a
-Google TV or Android TV box. A version you open as an app, without debloating, is in preview for both:
-[webos/](webos/README.md) for LG, [tizen/](tizen/README.md) for Samsung.
+LG TVs run webOS and Samsung TVs run Tizen; neither can run Android apps, and neither lets any app replace its
+home screen or the Home button. For the full Glass TV, plug in a Google TV or Android TV box (Chromecast with
+Google TV, Xiaomi Mi Box, NVIDIA Shield): the TV becomes the screen and Glass TV is Home. On LG, a version you
+open as an app is in preview in [webos/](webos/README.md).
 
 ## Places, or pictures of your own
 

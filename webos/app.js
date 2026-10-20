@@ -14,23 +14,11 @@
   /** The pane is exactly the zoomed tile, behind it: hidden at rest, seen only while it glides. */
   var FOCUS_SCALE = 1.07;
   var ROTATE_MS = 60 * 1000;
-  /** Back is 461 on LG's remote and 10009 on Samsung's; both are read as KEY.BACK. */
-  var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, OK: 13, BACK: 461 }, SAMSUNG_BACK = 10009;
-  /**
-   * Samsung TVs (Tizen) run this same app. They list and open apps through tizen.application, and keep
-   * switching inputs to Samsung's own partners, so there the top-bar buttons are left out.
-   * "#platform=tizen" previews that in a browser.
-   */
-  var TIZEN_API = typeof tizen !== 'undefined' && !!tizen.application;
-  var TIZEN = TIZEN_API || /platform=tizen/.test(location.hash);
+  var KEY = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, OK: 13, BACK: 461 };
 
   var $ = function (id) { return document.getElementById(id); };
   var rowsEl = $('rows'), glider = $('glider'), hero = $('hero'), glow = $('glow');
   var pills = [$('inputs'), $('settings')];
-  if (TIZEN) {
-    document.querySelector('.pills').style.display = 'none';
-    pills = [];
-  }
   var apps = [], tiles = [], inputs = [];
   /** Hold OK on an app: its menu (Move, Open), and whether it is being moved. */
   var hold = { open: false, index: 0, rows: [], timer: 0, fired: false };
@@ -67,10 +55,6 @@
 
   function launch(id) {
     if (!id) return;
-    if (TIZEN_API) {
-      tizen.application.launch(id, null, function (e) { console.log('[GlassTV] could not open ' + id + ': ' + e.message); });
-      return;
-    }
     if (typeof PalmServiceBridge === 'undefined') { console.log('[GlassTV] would open ' + id); return; }
     luna('luna://com.webos.applicationManager/launch', { id: id });
   }
@@ -83,14 +67,13 @@
     ['YouTube', '#e62117', 'youtube'], ['Netflix', '#141414', 'netflix'], ['Disney+', '#0b2f5c', 'disney'],
     ['Apple TV', '#1c1c1e', 'appletv'], ['Viu', '#f5b800', 'viu'], ['Durioo+', '#f08a24', 'durioo'],
     ['Crunchyroll', '#f47521', 'crunchyroll'], ['Prime Video', '#1a98ff', 'prime'], ['Spotify', '#1db954'],
-    ['Channels', '#c3195d'], ['Live TV', '#0f7b8a'], ['Web Browser', '#3b5bdb'], ['Media Player', '#6a5cff'],
+    ['LG Channels', '#c3195d'], ['Live TV', '#0f7b8a'], ['Web Browser', '#3b5bdb'], ['Media Player', '#6a5cff'],
     ['Gallery', '#e8590c'], ['Music', '#d6336c'], ['Settings', '#495057']
   ].map(function (s) {
     return { id: '', title: s[0], color: s[1], banner: s[2] ? 'samples/' + s[2] + '.png' : '', sample: true };
   });
 
   function loadApps(done) {
-    if (TIZEN_API) return loadTizenApps(done);
     luna('luna://com.webos.applicationManager/listLaunchPoints', {}, function (r) {
       var list = r && r.launchPoints;
       if (!list || !list.length) { inputs = SAMPLE_INPUTS; return done(SAMPLES); }
@@ -103,17 +86,6 @@
           color: lp.bgColor || lp.iconColor || '#2a2a30' };
       }));
     });
-  }
-
-  /** Samsung: the apps the TV shows in its own launcher, minus this one. */
-  function loadTizenApps(done) {
-    var self = '';
-    try { self = tizen.application.getCurrentApplication().appInfo.id; } catch (e) {}
-    tizen.application.getAppsInfo(function (list) {
-      var shown = list.filter(function (a) { return a.show && a.id !== self; });
-      if (!shown.length) return done(SAMPLES);
-      done(shown.map(function (a) { return { id: a.id, title: a.name, icon: a.iconPath, color: '#2a2a30' }; }));
-    }, function () { done(SAMPLES); });
   }
 
   // ---- tiles -------------------------------------------------------------------------------------
@@ -431,7 +403,6 @@
   function move(dRow, dCol) {
     var f = { row: focus.row, col: focus.col };
     if (dRow < 0 && f.row === 0) {
-      if (!pills.length) return;   // Samsung: no top bar to go up to
       f = { row: -1, col: f.col >= COLUMNS / 2 ? 1 : 0 };
     } else if (dRow > 0 && f.row === -1) {
       f = { row: 0, col: f.col === 1 ? COLUMNS - 1 : 0 };
@@ -466,24 +437,23 @@
   }
 
   document.addEventListener('keydown', function (e) {
-    var code = e.keyCode === SAMSUNG_BACK ? KEY.BACK : e.keyCode;
     if (hold.open || moving) {
-      if ([KEY.UP, KEY.DOWN, KEY.OK, KEY.BACK, KEY.LEFT, KEY.RIGHT].indexOf(code) >= 0) {
+      if ([KEY.UP, KEY.DOWN, KEY.OK, KEY.BACK, KEY.LEFT, KEY.RIGHT].indexOf(e.keyCode) >= 0) {
         // The OK that brought the menu up is still held: its repeats and release choose nothing.
-        if (code === KEY.OK && (e.repeat || hold.fired)) { e.preventDefault(); return; }
-        if (hold.open) holdKey(code); else moveKey(code);
+        if (e.keyCode === KEY.OK && (e.repeat || hold.fired)) { e.preventDefault(); return; }
+        if (hold.open) holdKey(e.keyCode); else moveKey(e.keyCode);
         e.preventDefault();
       }
       return;
     }
     if (menu.open) {
-      if ([KEY.UP, KEY.DOWN, KEY.OK, KEY.BACK, KEY.LEFT, KEY.RIGHT].indexOf(code) >= 0) {
-        menuKey(code);
+      if ([KEY.UP, KEY.DOWN, KEY.OK, KEY.BACK, KEY.LEFT, KEY.RIGHT].indexOf(e.keyCode) >= 0) {
+        menuKey(e.keyCode);
         e.preventDefault();
       }
       return;
     }
-    switch (code) {
+    switch (e.keyCode) {
       case KEY.LEFT: move(0, -1); break;
       case KEY.RIGHT: move(0, 1); break;
       case KEY.UP: move(-1, 0); break;

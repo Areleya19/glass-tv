@@ -7,8 +7,7 @@
  */
 (function () {
   'use strict';
-  var TIZEN = /platform=tizen/.test(location.hash);
-  var K = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, OK: 13, BACK: TIZEN ? 10009 : 461 };
+  var K = { LEFT: 37, UP: 38, RIGHT: 39, DOWN: 40, OK: 13, BACK: 461 };
   var errors = [], report = { phases: [] };
   window.addEventListener('error', function (e) { errors.push(String(e.message)); });
   window.addEventListener('unhandledrejection', function (e) { errors.push('promise: ' + e.reason); });
@@ -84,7 +83,7 @@
 
     // 2. The Inputs menu, opened, walked and closed 300 times.
     press(K.BACK);
-    for (var m = 0; m < (TIZEN ? 0 : 300); m++) {
+    for (var m = 0; m < 300; m++) {
       timed(press(K.UP));                               // dock -> top bar
       timed(press(K.LEFT));                             // Inputs
       timed(press(K.OK));                               // open
@@ -93,8 +92,7 @@
       timed(press(K.DOWN));                             // back to the dock
     }
     await wait(500);
-    check(TIZEN ? 'Inputs menu: none on Samsung' : 'Inputs menu x300', apps);
-    if (TIZEN && document.querySelector('.pill.selected')) report.phases.push({ phase: 'tizen', problems: ['top bar reachable'] });
+    check('Inputs menu x300', apps);
 
     // 3. Hold OK, Move, drag the app all over, drop it; 20 times. The order must really change.
     var orderBefore = order().join('|');
