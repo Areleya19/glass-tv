@@ -18,6 +18,8 @@
     <string name="offline">未连接网络</string>
     <string name="not_available">此电视不支持该功能</string>
     <string name="cant_open">无法打开 %1$s</string>
-    <string name="date_format">M月d日 EEEE</string>
+    <string name="date_format">M月d日 EEE</string>
     <string name="dream_name">时钟</string>
+    <string name="tile_move">移动</string>
+    <string name="tile_app_info">应用信息</string>
 </resources>

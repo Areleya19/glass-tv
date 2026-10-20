@@ -66,6 +66,7 @@ final class Glider extends View {
     private final GlassRim rim;
     private final android.graphics.RectF shape = new android.graphics.RectF();
     private int style = DARK;
+    private boolean paneHidden;
     /**
      * The selected app's drop shadow, drawn by the glass glider behind it: soft and even all round,
      * where the system's shadow fell mostly below the tile and was trimmed at its sides. Drawn once
@@ -203,6 +204,16 @@ final class Glider extends View {
         for (int i = 0; i < springs.length; i++) springs[i].animateToFinalPosition(to[i]);
     }
 
+    /**
+     * While an app is being moved it wiggles, and the glass pane behind it would show at its corners:
+     * then only the app's shadow is drawn.
+     */
+    void setPaneHidden(boolean hidden) {
+        if (paneHidden == hidden) return;
+        paneHidden = hidden;
+        changed();
+    }
+
     /** Switches look at once; there is no blend between the two. The shadow eases in with the glass. */
     void setStyle(int style) {
         if (this.style == style) return;
@@ -279,6 +290,7 @@ final class Glider extends View {
         // Glass: the selected app's shadow, what is behind it softened, an even veil, and the
         // shining edge.
         drawShadow(canvas, r);
+        if (paneHidden) return;
         glass.draw(canvas, canvasOwner, shape, r, opacity);
         veil.setAlpha(Math.round(0x14 * opacity));
         canvas.drawRoundRect(shape, r, r, veil);

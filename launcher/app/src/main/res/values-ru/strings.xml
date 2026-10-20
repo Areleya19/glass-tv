@@ -18,7 +18,7 @@
     <string name="offline">Нет сети</string>
     <string name="not_available">Недоступно на этом телевизоре</string>
     <string name="cant_open">Не удалось открыть %1$s</string>
-    <string name="date_format">EEEE, d MMMM</string>
+    <string name="date_format">EEE, d MMM</string>
     <string name="dream_name">Часы</string>
     <string name="vpn">VPN</string>
     <string name="vpn_off">VPN отключён</string>
@@ -46,4 +46,6 @@
     <string name="card_state_new">Новая</string>
     <string name="card_state_new_key">Новый ключ</string>
     <string name="card_state_new_label">Новое название</string>
+    <string name="tile_move">Переместить</string>
+    <string name="tile_app_info">О приложении</string>
 </resources>

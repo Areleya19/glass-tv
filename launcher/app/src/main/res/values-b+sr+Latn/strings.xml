@@ -18,7 +18,7 @@
     <string name="offline">Nema mreže</string>
     <string name="not_available">Nije dostupno na ovom televizoru</string>
     <string name="cant_open">Nije moguće otvoriti %1$s</string>
-    <string name="date_format">EEEE, d. MMMM</string>
+    <string name="date_format">EEE, d. MMM</string>
     <string name="dream_name">Sat</string>
     <string name="vpn">VPN</string>
     <string name="vpn_off">VPN isključen</string>
@@ -27,4 +27,6 @@
     <string name="input_key_service_description">Otvara izbor ulaza kada se na daljinskom pritisne dugme Input.</string>
     <string name="home_key_name">Dugme Home</string>
     <string name="home_key_description">Dugme Home na daljinskom otvara ovaj početni ekran.</string>
+    <string name="tile_move">Premesti</string>
+    <string name="tile_app_info">Informacije o aplikaciji</string>
 </resources>

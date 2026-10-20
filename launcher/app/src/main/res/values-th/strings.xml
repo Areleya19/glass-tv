@@ -18,7 +18,9 @@
     <string name="offline">ออฟไลน์</string>
     <string name="not_available">ทีวีเครื่องนี้ไม่รองรับ</string>
     <string name="cant_open">เปิด %1$s ไม่ได้</string>
-    <string name="date_format">EEEE  d MMMM</string>
+    <string name="date_format">EEE  d MMM</string>
     <string name="dream_name">นาฬิกา</string>
 
+    <string name="tile_move">ย้าย</string>
+    <string name="tile_app_info">ข้อมูลแอป</string>
 </resources>

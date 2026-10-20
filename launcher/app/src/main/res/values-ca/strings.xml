@@ -19,4 +19,6 @@
     <string name="not_available">No disponible en aquest televisor</string>
     <string name="cant_open">No s\'ha pogut obrir %1$s</string>
     <string name="dream_name">Rellotge</string>
+    <string name="tile_move">Mou</string>
+    <string name="tile_app_info">Informació de l\'aplicació</string>
 </resources>

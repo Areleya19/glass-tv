@@ -18,7 +18,7 @@
     <string name="offline">Çevrimdışı</string>
     <string name="not_available">Bu TV’de kullanılamıyor</string>
     <string name="cant_open">%1$s açılamıyor</string>
-    <string name="date_format">d MMMM EEEE</string>
+    <string name="date_format">d MMM EEE</string>
     <string name="dream_name">Saat</string>
     <string name="vpn">VPN</string>
     <string name="vpn_off">VPN Kapalı</string>
@@ -46,4 +46,6 @@
     <string name="card_state_new">Yeni</string>
     <string name="card_state_new_key">Yeni anahtar</string>
     <string name="card_state_new_label">Yeni ad</string>
+    <string name="tile_move">Taşı</string>
+    <string name="tile_app_info">Uygulama bilgisi</string>
 </resources>

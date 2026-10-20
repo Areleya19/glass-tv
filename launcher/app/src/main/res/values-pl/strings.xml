@@ -18,7 +18,7 @@
     <string name="offline">Brak sieci</string>
     <string name="not_available">Niedostępne na tym telewizorze</string>
     <string name="cant_open">Nie można otworzyć: %1$s</string>
-    <string name="date_format">EEEE  d MMMM</string>
+    <string name="date_format">EEE  d MMM</string>
     <string name="dream_name">Zegar</string>
     <string name="vpn">VPN</string>
     <string name="vpn_off">VPN wyłączony</string>
@@ -46,4 +46,6 @@
     <string name="card_state_new">Nowa</string>
     <string name="card_state_new_key">Nowy klucz</string>
     <string name="card_state_new_label">Nowa nazwa</string>
+    <string name="tile_move">Przenieś</string>
+    <string name="tile_app_info">Informacje o aplikacji</string>
 </resources>

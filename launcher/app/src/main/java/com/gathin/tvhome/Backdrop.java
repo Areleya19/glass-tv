@@ -23,7 +23,8 @@ import java.util.concurrent.Executor;
  * <p>Android 10 has no live blur: RenderEffect arrived in Android 12. The wallpaper only changes
  * every few minutes, though, so it is blurred once per change at half the screen's size, and each
  * glass surface draws the patch of it that lies underneath, scaled back up, with the focused app's
- * glow over it, as the glow lies over the wallpaper itself. Per frame that is two textured shapes.
+ * glow over it, as the glow lies over the wallpaper itself. The two are made into one picture per
+ * colour ahead of time, so at rest each piece of glass is a single textured shape.
  */
 final class Backdrop {
 
@@ -56,8 +57,90 @@ final class Backdrop {
     private static float glowMix = 1f;
     private static float glowAlpha;
     private static final List<WeakReference<View>> watchers = new ArrayList<>();
+    /**
+     * The blurred copy with the glow already in it, one per colour on screen. Painting the glow over
+     * the glass as a layer of its own cost a full pass over every piece of glass on every frame;
+     * a copy made once per colour, off the main thread, lets the glass paint a single layer instead.
+     * Until a colour's copy is ready the glass paints the glow as a layer, as before.
+     * {@link #tintedGen} is the blurred copy they were made from.
+     */
+    private static final java.util.LinkedHashMap<Integer, Bitmap> tinted = new java.util.LinkedHashMap<>();
+    private static final java.util.Set<Integer> tinting = new java.util.HashSet<>();
+    private static int blurGen, tintedGen = -1;
+    private static Executor tintWorker;
+    private static Handler tintMain;
 
     private Backdrop() {
+    }
+
+    /** Where the coloured copies are made, and where they are handed back. Main thread. */
+    static void setWorker(Executor worker, Handler main) {
+        tintWorker = worker;
+        tintMain = main;
+        requestTints();
+    }
+
+    /** The coloured copy for {@code color}, or null while it is being made. Main thread. */
+    private static Bitmap tintedFor(int color) {
+        return tintedGen == blurGen ? tinted.get(color) : null;
+    }
+
+    /** Starts making the coloured copies the glass needs now. Main thread. */
+    private static void requestTints() {
+        if (tintedGen != blurGen) {
+            tinted.clear();
+            tintedGen = blurGen;
+        }
+        requestTint(glowTo);
+        if (glowMix < 1f) requestTint(glowFrom);
+    }
+
+    private static void requestTint(int color) {
+        final Bitmap base = blurred, shape = glowShape;
+        final Executor worker = tintWorker;
+        final Handler main = tintMain;
+        if (base == null || shape == null || worker == null || main == null) return;
+        if (tinted.containsKey(color) || !tinting.add(color)) return;
+        final int gen = blurGen;
+        try {
+            worker.execute(() -> {
+                Bitmap made = tint(base, shape, color);
+                main.post(() -> {
+                    tinting.remove(color);
+                    // A new picture came while this one was being made: make it again for that.
+                    if (gen != blurGen || made == null) {
+                        requestTints();
+                        return;
+                    }
+                    tinted.put(color, made);
+                    // Keep the colours on screen and this one, and a few recent ones; let the rest go.
+                    java.util.Iterator<Integer> it = tinted.keySet().iterator();
+                    while (tinted.size() > 4 && it.hasNext()) {
+                        int k = it.next();
+                        if (k != glowFrom && k != glowTo && k != color) it.remove();
+                    }
+                    invalidateWatchers();
+                });
+            });
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            tinting.remove(color);   // the activity that owned the worker has gone
+        }
+    }
+
+    /** The blurred copy with the glow over it at full strength, as the glass would paint the two. */
+    private static Bitmap tint(Bitmap base, Bitmap shape, int color) {
+        try {
+            int w = base.getWidth(), h = base.getHeight();
+            Bitmap out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+            Canvas c = new Canvas(out);
+            c.drawBitmap(base, 0f, 0f, null);
+            Paint p = new Paint(Paint.FILTER_BITMAP_FLAG);
+            p.setColorFilter(new PorterDuffColorFilter(0xFF000000 | color, PorterDuff.Mode.SRC_IN));
+            c.drawBitmap(shape, null, new android.graphics.Rect(0, 0, w, h), p);
+            return out;
+        } catch (OutOfMemoryError e) {
+            return null;
+        }
     }
 
     /**
@@ -71,6 +154,7 @@ final class Backdrop {
         glowTo = to;
         glowMix = mix;
         glowAlpha = alpha;
+        requestTints();
         invalidateWatchers();
     }
 
@@ -91,6 +175,7 @@ final class Backdrop {
 
     /** Memory is short: let go of what can be remade. The copy on the glass stays. */
     static void trim() {
+        tinted.clear();
         synchronized (SPARE_LOCK) {
             spare = null;
             pixels = null;
@@ -140,6 +225,8 @@ final class Backdrop {
         blurred = blur;
         if (previous == null) keepSpare(before);
         blurMix = previous != null ? 0f : 1f;
+        blurGen++;
+        requestTints();
         if (previous != null) {
             blurFade = android.animation.ValueAnimator.ofFloat(0f, 1f);
             blurFade.setDuration(fadeMs);
@@ -240,7 +327,9 @@ final class Backdrop {
         private final Matrix matrix = new Matrix();
         private final Matrix glowMatrix = new Matrix();
         private final int[] at = new int[2];
-        private Bitmap shaderOf, prevOf, glowOf;
+        private Bitmap shaderOf, prevOf, glowOf, underOf, overOf;
+        private final Paint under = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+        private final Paint over = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
         private int oldColorOf, newColorOf;
 
         /**
@@ -260,6 +349,7 @@ final class Backdrop {
             owner.getLocationOnScreen(at);
             matrix.setScale(SCALE, SCALE);
             matrix.postTranslate(-at[0], -at[1]);
+            if (drawTinted(canvas, rect, radius, alpha)) return;
             // Mid-change, the old picture's blur goes under the new one, which fades in on top.
             Bitmap p = previous;
             if (p != null && blurMix < 1f) {
@@ -304,6 +394,51 @@ final class Backdrop {
             glowNew.getShader().setLocalMatrix(glowMatrix);
             glowNew.setAlpha(Math.round(255 * alpha * glowAlpha * glowMix));
             canvas.drawRoundRect(rect, radius, radius, glowNew);
+        }
+
+        /**
+         * The glass from the coloured copies: one layer at rest, two while the colour blends from
+         * one app to the next or the glow fades in or out. False when a copy is not ready yet, or
+         * the wallpaper is changing, and the glass is painted layer by layer instead. Uses the
+         * matrix {@link #draw} has just set.
+         */
+        private boolean drawTinted(Canvas canvas, RectF rect, float radius, float alpha) {
+            if (previous != null && blurMix < 1f) return false;
+            if (glowAlpha <= 0f) return false;
+            Bitmap to = tintedFor(glowTo);
+            if (to == null) return false;
+            boolean blending = glowMix < 1f && glowFrom != glowTo;
+            if (blending && glowAlpha < 1f) return false;
+            Bitmap first;
+            float second;
+            if (blending) {
+                first = tintedFor(glowFrom);
+                if (first == null) return false;
+                second = glowMix;
+            } else if (glowAlpha < 1f) {
+                first = blurred;
+                second = glowAlpha;
+            } else {
+                first = null;
+                second = 1f;
+            }
+            if (first != null) {
+                if (first != underOf) {
+                    under.setShader(new BitmapShader(first, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
+                    underOf = first;
+                }
+                under.getShader().setLocalMatrix(matrix);
+                under.setAlpha(Math.round(255 * alpha));
+                canvas.drawRoundRect(rect, radius, radius, under);
+            }
+            if (to != overOf) {
+                over.setShader(new BitmapShader(to, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
+                overOf = to;
+            }
+            over.getShader().setLocalMatrix(matrix);
+            over.setAlpha(Math.round(255 * alpha * second));
+            canvas.drawRoundRect(rect, radius, radius, over);
+            return true;
         }
     }
 }

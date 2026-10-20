@@ -93,7 +93,7 @@ public class ClockDream extends DreamService {
     }
 
     /** How far below the top of {@code view} the tops of {@code letters} are drawn. */
-    private static float capInset(TextView view, String letters) {
+    static float capInset(TextView view, String letters) {
         Paint paint = view.getPaint();
         Rect bounds = new Rect();
         paint.getTextBounds(letters, 0, letters.length(), bounds);

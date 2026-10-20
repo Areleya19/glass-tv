@@ -265,7 +265,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         else if (cfg.wallpaper != null) setWallpaper(decodeWallpaper(cfg.wallpaper), false);
         glass = findViewById(R.id.glass);
         ambient = findViewById(R.id.ambient);
+        Backdrop.setWorker(wallDecoder, handler);
         heroShelf = findViewById(R.id.heroShelf);
+        // AM/PM's capitals start where the clock's digits do. The row lines its text up on one
+        // baseline, so AM/PM is lifted by the difference in the two letter heights.
+        TextView clock = findViewById(R.id.clock), amPm = findViewById(R.id.ampm);
+        android.graphics.Rect digits = new android.graphics.Rect(), letters = new android.graphics.Rect();
+        clock.getPaint().getTextBounds("0", 0, 1, digits);
+        amPm.getPaint().getTextBounds("AM", 0, 2, letters);
+        amPm.setTranslationY(digits.top - letters.top);
         heroName = findViewById(R.id.heroName);
         heroDesc = findViewById(R.id.heroDesc);
         // A share of the space between the side paddings, so the description wraps into a column
@@ -423,7 +431,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener((oldF, newF) -> {
             boolean onTile = newF != null && newF.getId() == R.id.card;
             if (!onTile) hideGlass();
-            if (!onTile && (newF == null || !(isTopPill(newF) || inInputsMenu(newF)))) glider.hide();
+            if (!onTile && (newF == null || !(isTopPill(newF) || inMenu(newF)))) glider.hide();
         });
 
         packageFilter.addAction(Intent.ACTION_PACKAGE_ADDED);
@@ -750,7 +758,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // Nothing of ours stays on screen over another app; an undecided prompt simply returns next time.
         if (cardPrompt != null) cardPrompt.dismiss();
         if (openPopup != null) openPopup.dismiss();
-        closeInputs(false);
+        closeMenu(false);
+        finishMove();
     }
 
     @Override
@@ -1037,11 +1046,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         setAmbient(color, false);
     }
 
-    /**
-     * The dock row sits towards the bottom of the screen, leaving room for rows_below_dock grid rows
-     * under it; the rest of the grid stays below until you press Down. Sets the grid's top padding
-     * for that, and says whether it was already right.
-     */
     private FadeTopFrame gridWrap;
 
     /** Turns the top fade on while any row reaches into its band, with room for a focused tile's zoom. */
@@ -1056,6 +1060,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         gridWrap.setFadeStrength(inBand ? 1f : 0f);
     }
 
+    /**
+     * The dock row sits towards the bottom of the screen, leaving room for rows_below_dock grid rows
+     * under it; the rest of the grid stays below until you press Down. Sets the grid's top padding
+     * for that, and says whether it was already right.
+     */
     private boolean parkDock() {
         int h = grid.getHeight();
         if (h <= 0) return false;
@@ -1207,6 +1216,155 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     // ---- navigation ------------------------------------------------------------------------------
+
+    // ---- arranging the tiles ---------------------------------------------------------------------
+
+    /** The tile being moved (adapter position), or -1; its card wiggles while it is. */
+    private int movingPos = -1;
+    private View movingCard;
+    private android.animation.ObjectAnimator wiggle;
+    /** A key whose release is swallowed: the OK or Back that put a moved tile down must not also open it. */
+    private int swallowRelease = -1;
+    /**
+     * Slides the tiles into their new places while an app is moved. The grid has no item animations
+     * otherwise: they would replay on every rebuild and cost frames while scrolling.
+     */
+    private androidx.recyclerview.widget.DefaultItemAnimator moveSlide;
+
+    /** Holding OK on an app: a glass menu to move it, or to open Android's page for it. */
+    @Override
+    public boolean onTileHeld(int position, View card) {
+        if (openMenu != null || movingPos >= 0) return true;
+        FrameLayout panel = (FrameLayout) getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
+        LinearLayout rows = panel.findViewById(R.id.rows);
+        final String key = adapter.keyAt(position);
+        if (adapter.canMove(position)) {
+            addInputRow(rows, () -> {
+                // No selection gliding back from the menu: it is simply gone, and the app wiggles.
+                glider.hideNow();
+                gliderOnPill = false;
+                closeMenu(true);
+            }, R.drawable.ic_move, getString(R.string.tile_move), -1, () -> startMove(key));
+        }
+        addInputRow(rows, () -> closeMenu(false), R.drawable.ic_info, getString(R.string.tile_app_info), -1,
+                () -> adapter.openAppInfo(adapter.positionOf(key)));
+        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        int width = Math.max((int) (190 * density), panel.getMeasuredWidth());
+        // Under the app when there is room; over it in the dock, which sits near the bottom.
+        panel.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.UNSPECIFIED);
+        card.getLocationInWindow(menuAt);
+        root.getLocationInWindow(menuGliderAt);
+        int below = menuAt[1] - menuGliderAt[1] + card.getHeight() + (int) (18 * density) + panel.getMeasuredHeight();
+        showMenu(panel, rows, card, width, below > root.getHeight() - (int) (24 * density));
+        return true;
+    }
+
+    /** Picks the app up: it wiggles, the arrows carry it, and OK or Back puts it down. */
+    private void startMove(String key) {
+        int pos = adapter.positionOf(key);
+        RecyclerView.ViewHolder vh = grid.findViewHolderForAdapterPosition(pos);
+        if (vh == null || !adapter.canMove(pos)) return;
+        movingPos = pos;
+        movingCard = vh.itemView.findViewById(R.id.card);
+        movingCard.requestFocus();
+        glider.setPaneHidden(true);
+        if (moveSlide == null) {
+            moveSlide = new androidx.recyclerview.widget.DefaultItemAnimator();
+            moveSlide.setSupportsChangeAnimations(false);
+            moveSlide.setMoveDuration(reducedMotion ? 140 : 220);
+        }
+        grid.setItemAnimator(moveSlide);
+        float tilt = reducedMotion ? 0.8f : 1.4f;
+        wiggle = android.animation.ObjectAnimator.ofFloat(movingCard, View.ROTATION, -tilt, tilt);
+        wiggle.setDuration(reducedMotion ? 260 : 140);
+        wiggle.setRepeatMode(android.animation.ValueAnimator.REVERSE);
+        wiggle.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+        wiggle.start();
+    }
+
+    /** Puts the moving app down where it is; the order was kept as it moved. */
+    private void finishMove() {
+        if (movingPos < 0) return;
+        if (wiggle != null) wiggle.cancel();
+        wiggle = null;
+        if (movingCard != null) movingCard.animate().rotation(0f).setDuration(120).start();
+        movingCard = null;
+        movingPos = -1;
+        glider.setPaneHidden(false);
+        // Back to no item animations once the last slide has finished.
+        RecyclerView.ItemAnimator slide = grid.getItemAnimator();
+        if (slide != null) slide.isRunning(() -> {
+            if (movingPos < 0 && grid.getItemAnimator() == slide) grid.setItemAnimator(null);
+        });
+    }
+
+    /** Carries the moving app one step, the other tiles making room, and the selection follows it. */
+    private void stepMove(int keyCode) {
+        int last = adapter.lastMovable();
+        int to = movingPos;
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+                if (movingPos % COLUMNS > 0) to = movingPos - 1;
+                break;
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+                if (movingPos % COLUMNS < COLUMNS - 1) to = Math.min(movingPos + 1, last);
+                break;
+            case KeyEvent.KEYCODE_DPAD_UP:
+                if (movingPos >= COLUMNS) to = movingPos - COLUMNS;
+                break;
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+                if (movingPos / COLUMNS < last / COLUMNS) to = Math.min(movingPos + COLUMNS, last);
+                break;
+            default:
+                return;
+        }
+        if (!adapter.move(movingPos, to)) return;
+        movingPos = to;
+        final View card = movingCard;
+        final int pos = to;
+        // Once the tiles have shifted, glide the selection (and the shelf, and the scroll) to it.
+        grid.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+            @Override
+            public void onLayoutChange(View v, int l, int t, int r, int b, int ol, int ot, int or, int ob) {
+                grid.removeOnLayoutChangeListener(this);
+                grid.post(() -> {
+                    if (movingPos == pos && card != null && card.isAttachedToWindow()) onTileFocused(pos, card);
+                });
+            }
+        });
+        grid.requestLayout();
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        int code = event.getKeyCode();
+        if (code == swallowRelease && event.getAction() == KeyEvent.ACTION_UP) {
+            swallowRelease = -1;
+            return true;
+        }
+        if (movingPos < 0) return super.dispatchKeyEvent(event);
+        boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
+        switch (code) {
+            case KeyEvent.KEYCODE_DPAD_LEFT:
+            case KeyEvent.KEYCODE_DPAD_RIGHT:
+            case KeyEvent.KEYCODE_DPAD_UP:
+            case KeyEvent.KEYCODE_DPAD_DOWN:
+                if (down) stepMove(code);
+                return true;
+            case KeyEvent.KEYCODE_DPAD_CENTER:
+            case KeyEvent.KEYCODE_ENTER:
+            case KeyEvent.KEYCODE_NUMPAD_ENTER:
+            case KeyEvent.KEYCODE_BACK:
+            case KeyEvent.KEYCODE_ESCAPE:
+                if (down) {
+                    finishMove();
+                    swallowRelease = code;
+                }
+                return true;
+            default:
+                return super.dispatchKeyEvent(event);
+        }
+    }
 
     @Override
     public boolean onTileVerticalKey(int position, int keyCode) {
@@ -1428,8 +1586,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         open(new Intent(inputAction).setDataAndType(uri, "vnd.android.cursor.item/channel"));
     }
 
-    /** The Inputs menu while it is open (see showInputs). */
-    private View inputsMenu;
+    /** The glass menu while one is open (Inputs, or an app's), and what it opened from. */
+    private View openMenu;
+    private View menuAnchor;
     private final int[] menuAt = new int[2], menuGliderAt = new int[2];
 
     /**
@@ -1440,11 +1599,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * the dock's tray, and the menu's glass paints it over itself.
      */
     private void showInputs() {
-        if (inputsMenu != null) return;
+        if (openMenu != null) return;
         View anchor = btnInputs;
         FrameLayout panel = (FrameLayout) getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
         LinearLayout rows = panel.findViewById(R.id.rows);
-        Runnable close = () -> closeInputs(false);
+        Runnable close = () -> closeMenu(false);
 
         // Compact: as wide as the Inputs pill (a touch wider so "HDMI 1" fits), hanging right below it.
         int width = Math.max(anchor.getWidth(), (int) (150 * density));
@@ -1517,6 +1676,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
         width = Math.max(width, panel.getMeasuredWidth());
 
+        showMenu(panel, rows, anchor, width, false);
+    }
+
+    /**
+     * Shows a glass menu in Home's own window, under {@code anchor} or, with {@code above}, over it:
+     * Home's focus shape glides from the anchor to the first row, the menu's glass paints it over
+     * itself, and the glass and rows fade in around it. Up from the first row (Down from the last when
+     * the menu is above), or Back, closes it and the shape glides back to the anchor.
+     */
+    private void showMenu(FrameLayout panel, LinearLayout rows, View anchor, int width, boolean above) {
         GlassDrawable glass = new GlassDrawable(panel, 20 * density, density, glider, 0.5f, true);
         panel.setBackground(glass);
         Backdrop.watch(panel);
@@ -1525,12 +1694,19 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         root.getLocationInWindow(menuGliderAt);
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(width, ViewGroup.LayoutParams.WRAP_CONTENT);
         lp.leftMargin = Math.max(0, Math.min(menuAt[0] - menuGliderAt[0], root.getWidth() - width));
-        lp.topMargin = menuAt[1] - menuGliderAt[1] + anchor.getHeight() + (int) (10 * density);
+        int gap = (int) (10 * density);
+        if (above) {
+            panel.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY), View.MeasureSpec.UNSPECIFIED);
+            lp.topMargin = Math.max(0, menuAt[1] - menuGliderAt[1] - gap - panel.getMeasuredHeight());
+        } else {
+            lp.topMargin = menuAt[1] - menuGliderAt[1] + anchor.getHeight() + gap;
+        }
         root.addView(panel, lp);
-        inputsMenu = panel;
+        openMenu = panel;
+        menuAnchor = anchor;
 
-        // Focus stays in the menu until it closes. Up from the first row closes it, and the
-        // selection glides back up into the pill.
+        // Focus stays in the menu until it closes. Leaving it towards the anchor closes it, and the
+        // selection glides back into what it opened from.
         View first = null, last = null;
         for (int i = 0; i < rows.getChildCount(); i++) {
             View row = rows.getChildAt(i);
@@ -1550,15 +1726,17 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 switch (keyCode) {
                     case KeyEvent.KEYCODE_DPAD_UP:
                         if (v != top) return false;
-                        if (down) closeInputs(true);
+                        if (down && !above) closeMenu(true);
                         return true;
                     case KeyEvent.KEYCODE_DPAD_DOWN:
-                        return v == bottom;
+                        if (v != bottom) return false;
+                        if (down && above) closeMenu(true);
+                        return true;
                     case KeyEvent.KEYCODE_DPAD_LEFT:
                     case KeyEvent.KEYCODE_DPAD_RIGHT:
                         return true;
                     case KeyEvent.KEYCODE_BACK:
-                        if (down) closeInputs(true);
+                        if (down) closeMenu(true);
                         return true;
                     default:
                         return false;
@@ -1569,7 +1747,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // The glass and the rows fade in around the selection as it arrives.
         glass.setAlpha(0);
         rows.setAlpha(0f);
-        rows.setTranslationY(-8 * density);
+        final float slide = (above ? 8 : -8) * density;
+        rows.setTranslationY(slide);
         android.animation.ValueAnimator in = android.animation.ValueAnimator.ofFloat(0f, 1f);
         in.setDuration(220);
         in.setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f));
@@ -1577,7 +1756,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             float f = (float) an.getAnimatedValue();
             glass.setAlpha(Math.round(255 * f));
             rows.setAlpha(f);
-            rows.setTranslationY(-8 * density * (1f - f));
+            rows.setTranslationY(slide * (1f - f));
         });
         in.start();
         if (top != null) top.requestFocus();
@@ -1611,21 +1790,22 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         glider.moveTo(l, t, l + row.getWidth(), t + row.getHeight(), 13 * density);
     }
 
-    /** Closes the Inputs menu; with {@code toPill}, focus and the selection go back to the Inputs pill. */
-    private void closeInputs(boolean toPill) {
-        View panel = inputsMenu;
+    /** Closes the open menu; with {@code toAnchor}, focus and the selection go back to what it opened from. */
+    private void closeMenu(boolean toAnchor) {
+        View panel = openMenu;
         if (panel == null) return;
-        inputsMenu = null;
-        if (toPill) btnInputs.requestFocus();
+        openMenu = null;
+        if (toAnchor && menuAnchor != null) menuAnchor.requestFocus();
+        menuAnchor = null;
         panel.animate().alpha(0f).setDuration(reducedMotion ? 80 : 150).withEndAction(() -> {
             glider.removeCompanion(panel);
             root.removeView(panel);
         }).start();
     }
 
-    private boolean inInputsMenu(View v) {
-        for (View p = v; p != null && inputsMenu != null; p = p.getParent() instanceof View ? (View) p.getParent() : null) {
-            if (p == inputsMenu) return true;
+    private boolean inMenu(View v) {
+        for (View p = v; p != null && openMenu != null; p = p.getParent() instanceof View ? (View) p.getParent() : null) {
+            if (p == openMenu) return true;
         }
         return false;
     }

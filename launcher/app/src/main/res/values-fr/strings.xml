@@ -18,6 +18,8 @@
     <string name="offline">Hors ligne</string>
     <string name="not_available">Indisponible sur cette TV</string>
     <string name="cant_open">Impossible d\'ouvrir %1$s</string>
-    <string name="date_format">EEEE d MMMM</string>
+    <string name="date_format">EEE d MMM</string>
     <string name="dream_name">Horloge</string>
+    <string name="tile_move">Déplacer</string>
+    <string name="tile_app_info">Infos sur l\'appli</string>
 </resources>

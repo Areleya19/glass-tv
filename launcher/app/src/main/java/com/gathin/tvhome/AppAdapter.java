@@ -41,7 +41,9 @@ import java.util.Set;
 
 /**
  * App tiles. The first {@link MainActivity#COLUMNS} positions are the pinned dock (favourites, fixed order),
- * then the module cards the owner chose to show (by label), the rest is alphabetical.
+ * then the module cards the owner chose to show (by label), the rest is alphabetical. Once anyone has
+ * moved a tile (hold OK, then Move), the order they made is kept instead, and apps installed later
+ * join at the end.
  */
 public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
@@ -50,6 +52,9 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
         /** Called for a D-pad direction key on a tile. Return true when handled (focus stays put). */
         boolean onTileVerticalKey(int position, int keyCode);
+
+        /** OK was held on a tile. Return false to open the app's info page, as before. */
+        boolean onTileHeld(int position, View card);
     }
 
     static final class Entry {
@@ -122,6 +127,11 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     /** Calmer motion for weak GPUs (config.xml, reduced_motion): no overshoot, shorter fades. */
     private final boolean reducedMotion;
     private final List<Entry> items = new ArrayList<>();
+    /** The order someone arranged the tiles in, by key (see {@link #keyAt}); empty until they do. */
+    private final List<String> arranged = new ArrayList<>();
+    private static final String ORDER_PREFS = "tiles", ORDER_KEY = "order";
+    /** Rebind payload: only whether the tile's name shows, which depends on being in the dock. */
+    private static final Object DOCK_CHANGED = new Object();
 
     AppAdapter(Context ctx, TileListener listener, int dockSize, Config cfg) {
         this.ctx = ctx;
@@ -134,6 +144,8 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         // Tiles keep their identity across reload(), so a focused tile stays on its app instead of
         // its view being rebound to whatever app now sits in that slot.
         setHasStableIds(true);
+        String saved = ctx.getSharedPreferences(ORDER_PREFS, Context.MODE_PRIVATE).getString(ORDER_KEY, "");
+        if (!saved.isEmpty()) arranged.addAll(Arrays.asList(saved.split("\n")));
     }
 
     /**
@@ -208,7 +220,16 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             }
         }
         builtApps = apps;
+        Map<String, Integer> place = new HashMap<>();
+        for (int i = 0; i < arranged.size(); i++) place.put(arranged.get(i), i);
         Collections.sort(fresh, (a, b) -> {
+            // The order someone arranged comes first; apps it has not seen yet go after it.
+            Integer pa = place.get(a.component.flattenToShortString()), pb = place.get(b.component.flattenToShortString());
+            if (pa != null || pb != null) {
+                if (pa == null) return 1;
+                if (pb == null) return -1;
+                return Integer.compare(pa, pb);
+            }
             int fa = favourites.indexOf(a.pkg), fb = favourites.indexOf(b.pkg);
             if (fa >= 0 || fb >= 0) {
                 if (fa < 0) return 1;
@@ -293,14 +314,65 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         }
         h.card.setOnClickListener(v -> launch(e));
         h.card.setOnLongClickListener(v -> {
-            Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + e.pkg));
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            try {
-                ctx.startActivity(i);
-            } catch (ActivityNotFoundException ignored) {
-            }
+            int pos = h.getBindingAdapterPosition();
+            if (listener != null && pos != RecyclerView.NO_POSITION && listener.onTileHeld(pos, v)) return true;
+            openAppInfo(e);
             return true;
         });
+    }
+
+    @Override
+    public void onBindViewHolder(@NonNull Holder h, int position, @NonNull List<Object> payloads) {
+        if (payloads.size() == 1 && payloads.get(0) == DOCK_CHANGED) {
+            h.name.setVisibility(position < dockSize ? View.INVISIBLE : View.VISIBLE);
+            return;
+        }
+        onBindViewHolder(h, position);
+    }
+
+    /** Android's page for the app at {@code position}: storage, permissions, uninstall. */
+    void openAppInfo(int position) {
+        if (position >= 0 && position < items.size()) openAppInfo(items.get(position));
+    }
+
+    private void openAppInfo(Entry e) {
+        Intent i = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + e.pkg));
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            ctx.startActivity(i);
+        } catch (ActivityNotFoundException ignored) {
+        }
+    }
+
+    /** Whether the tile at {@code position} can be moved: every app can, the Default home tile cannot. */
+    boolean canMove(int position) {
+        return position >= 0 && position < items.size() && items.get(position).kind != Entry.HOME_SETTINGS;
+    }
+
+    /** The last position a moved tile can take: before the Default home tile, which stays last. */
+    int lastMovable() {
+        int last = items.size() - 1;
+        while (last >= 0 && items.get(last).kind == Entry.HOME_SETTINGS) last--;
+        return last;
+    }
+
+    /**
+     * Moves the tile at {@code from} to {@code to}, the tiles between shifting to make room, and keeps
+     * the new order. Returns false when it cannot go there.
+     */
+    boolean move(int from, int to) {
+        if (from == to || !canMove(from) || to < 0 || to > lastMovable()) return false;
+        Entry e = items.remove(from);
+        items.add(to, e);
+        notifyItemMoved(from, to);
+        // A tile crossing into or out of the dock shows or hides its name.
+        int lo = Math.min(from, to), hi = Math.max(from, to);
+        if (lo < dockSize && hi >= dockSize) notifyItemRangeChanged(lo, hi - lo + 1, DOCK_CHANGED);
+        arranged.clear();
+        for (Entry x : items) if (x.kind != Entry.HOME_SETTINGS) arranged.add(x.component.flattenToShortString());
+        ctx.getSharedPreferences(ORDER_PREFS, Context.MODE_PRIVATE).edit()
+                .putString(ORDER_KEY, android.text.TextUtils.join("\n", arranged)).apply();
+        return true;
     }
 
     /** Opens the tile's activity by explicit component, with no extras: a card can name nothing else. */
