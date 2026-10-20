@@ -55,8 +55,8 @@ public class ClockDream extends DreamService {
         ((ViewGroup) content).addView(face, 0, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         TextClock date = findViewById(R.id.dreamDate);
-        // The month in full and the year (in capitals, see dream_clock.xml): OCTOBER 21, 2026.
-        String pattern = DateFormat.getBestDateTimePattern(Locale.getDefault(), "MMMMdyyyy");
+        // The month in short and the year (in capitals, see dream_clock.xml): OCT 21, 2026.
+        String pattern = DateFormat.getBestDateTimePattern(Locale.getDefault(), "MMMdyyyy");
         date.setFormat12Hour(pattern);
         date.setFormat24Hour(pattern);
         View screen = (View) content.getParent();
@@ -78,7 +78,8 @@ public class ClockDream extends DreamService {
         TextView date = findViewById(R.id.dreamDate);
         time.setTextSize(TypedValue.COMPLEX_UNIT_PX, 44f * u);
         amPm.setTextSize(TypedValue.COMPLEX_UNIT_PX, 14f * u);
-        date.setTextSize(TypedValue.COMPLEX_UNIT_PX, 14f * u);
+        // The same size as Home's date.
+        date.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f);
 
         // The tops of the digits sit 34 units under the rim, below the room the dial keeps for its shadow.
         LinearLayout.LayoutParams row = (LinearLayout.LayoutParams) findViewById(R.id.dreamTimeRow).getLayoutParams();
@@ -87,9 +88,9 @@ public class ClockDream extends DreamService {
         LinearLayout.LayoutParams ampm = (LinearLayout.LayoutParams) amPm.getLayoutParams();
         ampm.leftMargin = Math.round(5f * u);
         amPm.setTranslationY(capInset(time, "0") - capInset(amPm, "PM"));
-        // The date's capitals start 22 units under the digits' baseline.
+        // The date's capitals start 16.5 units under the digits' baseline.
         LinearLayout.LayoutParams dateRow = (LinearLayout.LayoutParams) date.getLayoutParams();
-        dateRow.topMargin = Math.round(22f * u - time.getPaint().getFontMetrics().descent - capInset(date, "O"));
+        dateRow.topMargin = Math.round(16.5f * u - time.getPaint().getFontMetrics().descent - capInset(date, "O"));
         content.requestLayout();
     }
 

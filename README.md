@@ -1,23 +1,24 @@
 # Clean TV
 
-**A calm, movie-lit home screen for Android TV and Google TV.**
+**A calm home screen for Android TV and Google TV, with places to visit behind it.**
 
 Based on [Clean Your TV](https://github.com/Gathin23/cleanyourtv) by Gathin. Not affiliated with it.
 Clean TV keeps everything Clean Your TV does — debloat any Android TV over Wi-Fi, no root, fully reversible,
-and swap the ad-filled home screen for a light Apple TV-style launcher — and adds a home screen that changes
-with the films that are out now.
+and swap the ad-filled home screen for a light Apple TV-style launcher — and adds a home screen that shows a
+new set of places every week.
 
-![Home screen with a movie wallpaper](docs/screenshots/home-movie.jpg)
+![Home screen](docs/screenshots/home-movie.jpg)
 
 ## What Clean TV adds
 
-- **Movie wallpapers that update themselves.** Once a day the TV asks [TMDB](https://www.themoviedb.org) for
-  the 10 most popular films of the last 75 days, downloads their backdrops, deletes the old ones and rotates
-  through them. Pictures are dimmed and centred on their subject so the clock and tiles stay readable.
-  Adult titles are never fetched, horror and thriller are left out by default, and you can limit it to
-  animation and family films.
-- **Rotating wallpapers of your own.** Put pictures in a theme's `wallpapers/` folder and choose how often they
-  change, down to every 5 seconds. Each picture is decoded in the background and cross-faded.
+- **Places to visit that renew themselves.** Once a week the TV takes the pictures Bing has shown on its home
+  page over the past days — landmarks, landscapes, wildlife — deletes last week's and rotates through them,
+  dimmed so the clock and tiles stay readable. The shelf above the dock names each one, its country and a few
+  lines about it. Pictures with people in them are skipped: by the words in their caption, and by Android's
+  own face detector on the TV. No key, no account, nothing to set up.
+- **Rotating wallpapers of your own** instead, with `"places": false`: put pictures in a theme's `wallpapers/`
+  folder and choose how often they change, down to every 5 seconds. Each picture is decoded in the background
+  and cross-faded.
 - **Glass everywhere.** The dock band and the Inputs panel are frosted glass, like the top-bar buttons.
 - **Rows feather out under the top bar** instead of being cut off when you scroll.
 - **A calmer highlight.** The glass highlight glides onto a tile and stops, with no bounce, hugs the tile's
@@ -59,23 +60,21 @@ an app's cache badly enough to leave it launching to a blank screen —
 [`tools/cache-clean.sh`](docs/cache-clean.md) finds the TVs on your network and
 clears their caches, leaving sign-ins and app data untouched.
 
-## Turning on movie wallpapers
+## Places, or pictures of your own
 
-1. Get a free API key at [themoviedb.org → Settings → API](https://www.themoviedb.org/settings/api).
-2. Make a theme folder with a `config.json` like this, and push it with `tools/theme.sh`:
+Places are on from the start. To change how often the picture changes, or to use your own pictures and keep
+the launcher offline, make a theme folder with a `config.json` like this and push it with `tools/theme.sh`:
 
 ```json
 {
-  "tmdb_api_key": "your key",
-  "movie_region": "MY",
-  "movie_genres": "16|10751",
+  "places": false,
   "wallpaper_seconds": 15,
   "show_network_pill": false
 }
 ```
 
-`movie_genres` `16|10751` means animation *or* family; leave it out for every genre. All keys are listed in
-[themes/README.md](themes/README.md). Without a key, the launcher never goes online.
+All keys are listed in [themes/README.md](themes/README.md). With `"places": false`, the launcher never goes
+online.
 
 ## Credits and licence
 
@@ -83,5 +82,5 @@ clears their caches, leaving sign-ins and app data untouched.
   [LICENSE](LICENSE). Its debloat lists, tools and launcher are the foundation of this project.
 - The Outfit typeface is under the SIL Open Font License (`launcher/FONT-LICENSE-OFL.txt`).
 - The Inputs icon is from Google's Material Icons (Apache 2.0).
-- This product uses the TMDB API but is not endorsed or certified by TMDB. Movie pictures are fetched on your
-  own TV with your own key and are not part of this repository.
+- Pictures of places and their captions are Bing's daily images (Microsoft). They are fetched on your own TV
+  and are not part of this repository.

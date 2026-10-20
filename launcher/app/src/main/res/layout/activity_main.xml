@@ -12,7 +12,7 @@
         android:layout_height="match_parent"
         android:alpha="0" />
 
-    <!-- Top shelf: the film's name and what it is about, positioned above the dock in code.
+    <!-- Top shelf: the place's name, its country and what it is about, positioned above the dock in code.
          The width is capped in code to a share of the space between the side paddings, so the
          description wraps in a column instead of running the width of the screen. -->
     <LinearLayout
@@ -28,27 +28,43 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="#FFFFFFFF"
-            android:textSize="42sp"
+            android:textSize="40sp"
             android:fontFamily="@font/outfit"
             android:fontVariationSettings="'wght' 300"
             android:letterSpacing="-0.02"
             android:includeFontPadding="false"
             android:lineSpacingMultiplier="0.75"
-            android:maxLines="2"
+            android:maxLines="1"
             android:ellipsize="end" />
+
+        <!-- The country close under the name, and the description a little further below it. -->
+        <TextView
+            android:id="@+id/heroWhere"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="-1.5dp"
+            android:textColor="#CCFFFFFF"
+            android:textSize="16sp"
+            android:fontFamily="@font/outfit"
+            android:fontVariationSettings="'wght' 500"
+            android:letterSpacing="0.18"
+            android:textAllCaps="true"
+            android:includeFontPadding="false"
+            android:singleLine="true"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/heroDesc"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="9.5dp"
             android:textColor="#B3FFFFFF"
             android:textSize="14sp"
             android:fontFamily="@font/outfit"
             android:fontVariationSettings="'wght' 300"
             android:lineSpacingExtra="2dp"
             android:includeFontPadding="false"
-            android:maxLines="3"
+            android:maxLines="2"
             android:ellipsize="end"
             android:visibility="gone" />
     </LinearLayout>

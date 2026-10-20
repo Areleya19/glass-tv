@@ -98,18 +98,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private final Rect alignCard = new Rect(), alignButton = new Rect();
     /** How much of the space between the side paddings the top shelf may use. */
     private static final float HERO_WIDTH_SHARE = 0.40f;
-    private static final float HERO_TITLE_MAX_SP = 42f;
+    /** The name is one line, and may run wider than the description, up to this share. */
+    private static final float HERO_NAME_WIDTH_SHARE = 0.60f;
+    private static final float HERO_TITLE_MAX_SP = 40f;
     /** The breathing room between the shelf's last line and the top of the app container. */
     private static final float HERO_GAP_DP = 67f;
     private static final float HERO_TITLE_MIN_SP = 26f;
     /** The shelf's width in pixels, worked out once from the screen. */
-    private int heroMaxWidth;
+    private int heroMaxWidth, heroNameMaxWidth;
     private View heroShelf;
     private TextView heroName;
     private TextView heroDesc;
-    /** The film on screen, when its picture came with a sidecar; null for the user's own wallpapers. */
-    private String movieTitle;
-    private String movieOverview = "";
+    private TextView heroWhere;
+    /** The place on screen and a few lines about it; null for the user's own wallpapers. */
+    private String placeName;
+    private String placeText = "", placeCountry = "";
     private int ambientColor = -1;
     private boolean heroShown;
     /** The glow behind the tiles. It follows every app, while the shelf only names dock apps. */
@@ -171,11 +174,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private long wallShownAt;
     private android.widget.ImageView wallView;
     private android.graphics.Bitmap wallBitmap;
-    /** Settings kept for the movie refresh, which runs after onCreate. */
+    /** Settings kept for the places refresh, which runs after onCreate. */
     private Config config;
-    /** Recent-movie wallpapers are on (a TMDB key is set); their pictures are dimmed behind the tiles. */
-    private boolean movieMode;
-    private volatile boolean movieRefreshRunning;
+    /** Pictures of places are on (see PlaceWallpapers); they are dimmed behind the tiles. */
+    private boolean placesMode;
+    private volatile boolean placesRefreshRunning;
     /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
         @Override
@@ -227,7 +230,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         public void run() {
             updateShamsiDate();
             updateWifiLabel();
-            refreshMoviesIfDue();
+            refreshPlacesIfDue();
             handler.postDelayed(this, MINUTE_MS);
         }
     };
@@ -258,21 +261,25 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         config = cfg;
         wallpapers = cfg.wallpapers;
         wallpaperIntervalMs = cfg.wallpaperIntervalMs;
-        movieMode = !cfg.tmdbApiKey.isEmpty();
-        if (movieMode && !MovieWallpapers.list(this).isEmpty()) wallpapers = MovieWallpapers.list(this);
+        placesMode = cfg.places;
+        // Places only, when they are on: never the theme's own pictures, even before the first
+        // week's places have arrived.
+        if (placesMode) wallpapers = PlaceWallpapers.list(this);
         if (!wallpapers.isEmpty()) showNextWallpaper(false);
-        else if (cfg.wallpaper != null) setWallpaper(decodeWallpaper(cfg.wallpaper), false);
+        else if (cfg.wallpaper != null && !placesMode) setWallpaper(decodeWallpaper(cfg.wallpaper), false);
         glass = findViewById(R.id.glass);
         ambient = findViewById(R.id.ambient);
         Backdrop.setWorker(wallDecoder, handler);
         heroShelf = findViewById(R.id.heroShelf);
         heroName = findViewById(R.id.heroName);
         heroDesc = findViewById(R.id.heroDesc);
+        heroWhere = findViewById(R.id.heroWhere);
         // A share of the space between the side paddings, so the description wraps into a column
-        // rather than running the width of the screen. The title is one line and follows the same cap.
+        // rather than running the width of the screen. The name is one line, allowed a wider share.
         int usable = getResources().getDisplayMetrics().widthPixels - (int) ((55 + 56) * density);
         heroMaxWidth = Math.round(usable * HERO_WIDTH_SHARE);
-        heroName.setMaxWidth(heroMaxWidth);
+        heroNameMaxWidth = Math.round(usable * HERO_NAME_WIDTH_SHARE);
+        heroName.setMaxWidth(heroNameMaxWidth);
         heroDesc.setMaxWidth(heroMaxWidth);
         // The shelf grows and shrinks with the name and the description, so it hangs from its
         // bottom edge: every time it is measured, its top is worked out again. Positioning it by
@@ -493,52 +500,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
     }
 
-    /**
-     * Movie backdrops often frame their characters to one side, leaving room for a title. Finds where the
-     * detail is (squared edge energy on a 64 x 36 thumbnail, so the sharpest parts, faces and props, count
-     * most), then crops a 16:9 window zoomed just enough to bring the subject to the middle (1.15x to 1.7x).
-     * It follows the subject only halfway up or down, so heads and feet stay in the picture.
-     */
-    private static android.graphics.Bitmap centreOnSubject(android.graphics.Bitmap src) {
-        if (src == null) return null;
-        try {
-            final int tw = 64, th = 36;
-            android.graphics.Bitmap thumb = android.graphics.Bitmap.createScaledBitmap(src, tw, th, true);
-            int[] px = new int[tw * th];
-            thumb.getPixels(px, 0, tw, 0, 0, tw, th);
-            thumb.recycle();
-            float[] lum = new float[px.length];
-            for (int i = 0; i < px.length; i++) {
-                int c = px[i];
-                lum[i] = 0.299f * ((c >> 16) & 0xFF) + 0.587f * ((c >> 8) & 0xFF) + 0.114f * (c & 0xFF);
-            }
-            double sum = 0, sx = 0, sy = 0;
-            for (int y = 1; y < th - 1; y++) {
-                for (int x = 1; x < tw - 1; x++) {
-                    float gx = lum[y * tw + x + 1] - lum[y * tw + x - 1];
-                    float gy = lum[(y + 1) * tw + x] - lum[(y - 1) * tw + x];
-                    double e = gx * gx + gy * gy;
-                    e *= e;
-                    sum += e;
-                    sx += e * x;
-                    sy += e * y;
-                }
-            }
-            if (sum <= 0) return src;
-            float fx = (float) (sx / sum) / (tw - 1), fy = (float) (sy / sum) / (th - 1);
-            float zoom = Math.min(1.7f, Math.max(1.15f, 1f / Math.max(0.001f, 2f * Math.min(fx, 1f - fx))));
-            fy = 0.5f * fy + 0.25f;
-            int cw = Math.round(src.getWidth() / zoom), ch = Math.round(src.getHeight() / zoom);
-            int x = Math.max(0, Math.min(src.getWidth() - cw, Math.round(fx * src.getWidth() - cw / 2f)));
-            int y = Math.max(0, Math.min(src.getHeight() - ch, Math.round(fy * src.getHeight() - ch / 2f)));
-            android.graphics.Bitmap out = android.graphics.Bitmap.createBitmap(src, x, y, cw, ch);
-            if (out != src) src.recycle();
-            return out;
-        } catch (Exception | OutOfMemoryError e) {
-            return src;
-        }
-    }
-
     /** Puts a picture behind everything, cross-fading from the previous one when asked. */
     private void setWallpaper(android.graphics.Bitmap bmp, boolean fade) {
         setWallpaper(bmp, fade, null);
@@ -550,8 +511,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (wallView == null) {
             wallView = new android.widget.ImageView(this);
             wallView.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
-            // Movie stills are bright: dim them so the clock, names and tiles stay readable.
-            if (movieMode) wallView.setColorFilter(0xFF7A7A7A, android.graphics.PorterDuff.Mode.MULTIPLY);
+            // Photos are bright: dim them so the clock, names and tiles stay readable.
+            if (placesMode) wallView.setColorFilter(0xFF7A7A7A, android.graphics.PorterDuff.Mode.MULTIPLY);
             root.addView(wallView, 0, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         }
         android.graphics.Bitmap old = wallBitmap;
@@ -587,7 +548,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** Hands the picture now on screen to the glass, which blurs it once, off the main thread. */
     private void blurBackdrop(android.graphics.Bitmap bmp) {
         android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
-        Backdrop.update(bmp, dm.widthPixels, dm.heightPixels, movieMode ? 0xFF7A7A7A : 0, wallDecoder, handler);
+        Backdrop.update(bmp, dm.widthPixels, dm.heightPixels, placesMode ? 0xFF7A7A7A : 0, wallDecoder, handler);
     }
 
     /** Shows the next picture from the wallpapers folder; the position survives restarts. */
@@ -597,23 +558,23 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         prefs.edit().putInt("index", next).apply();
         wallShownAt = android.os.SystemClock.elapsedRealtime();
         final File file = wallpapers.get(next);
-        // On a cold start, name the film straight away: waiting for the decode showed the app's name
+        // On a cold start, name the place straight away: waiting for the decode showed the app's name
         // at full size and shrank it a moment later. After that the name changes with the picture,
-        // or it would name the next film over the last one's picture while that one decodes.
-        if (movieTitle == null) setMovie(file);
+        // or it would name the next place over the last one's picture while that one decodes.
+        if (placeName == null) setPlace(file);
         final boolean firstPicture = wallBitmap == null;
         wallDecoder.execute(() -> {
-            android.graphics.Bitmap bmp = movieMode ? centreOnSubject(decodeWallpaper(file)) : decodeWallpaper(file);
+            android.graphics.Bitmap bmp = decodeWallpaper(file);
             // After the first picture, the blur is made here, before the picture is shown, so the glass
             // changes with the wallpaper rather than after it. The first picture of a fresh start does
             // not wait for its blur: Home is held for it, and the glass catches up a moment later.
             android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
             android.graphics.Bitmap blur = firstPicture ? null
-                    : Backdrop.blur(bmp, dm.widthPixels, dm.heightPixels, movieMode ? 0xFF7A7A7A : 0);
+                    : Backdrop.blur(bmp, dm.widthPixels, dm.heightPixels, placesMode ? 0xFF7A7A7A : 0);
             handler.post(() -> {
                 if (isDestroyed()) return;
                 setWallpaper(bmp, fade, blur);
-                setMovie(file);
+                setPlace(file);
             });
         });
     }
@@ -627,31 +588,29 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
     };
 
-    /** Fetches the day's movie pictures in the background, then switches the rotation to them. */
-    private void refreshMoviesIfDue() {
-        if (!movieMode || movieRefreshRunning || !MovieWallpapers.due(this)) return;
-        movieRefreshRunning = true;
-        final Config cfg = config;
+    /** Fetches the week's places in the background, then switches the rotation to them. */
+    private void refreshPlacesIfDue() {
+        if (!placesMode || placesRefreshRunning || !PlaceWallpapers.due(this)) return;
+        placesRefreshRunning = true;
         new Thread(() -> {
-            boolean changed = MovieWallpapers.refresh(getApplicationContext(), cfg);
+            boolean changed = PlaceWallpapers.refresh(getApplicationContext());
             handler.post(() -> {
-                movieRefreshRunning = false;
+                placesRefreshRunning = false;
                 if (!changed || isDestroyed()) return;
-                List<File> movies = MovieWallpapers.list(this);
-                if (movies.isEmpty()) return;
-                // Switch straight to the movies when the rotation was still on the theme's own pictures.
-                boolean wasMovies = !wallpapers.isEmpty()
-                        && MovieWallpapers.DIR.equals(wallpapers.get(0).getParentFile().getName());
-                wallpapers = movies;
-                if (!wasMovies) showNextWallpaper(wallBitmap != null);
+                List<File> places = PlaceWallpapers.list(this);
+                if (places.isEmpty()) return;
+                // Last week's pictures are gone: show one of this week's straight away, so the
+                // name on the shelf and the picture behind it always match.
+                wallpapers = places;
+                showNextWallpaper(wallBitmap != null);
                 if (!isFinishing() && hasWindowFocus()) startWallpaperRotation();
             });
-        }, "movie-wallpapers").start();
+        }, "place-wallpapers").start();
     }
 
     /** Whenever Home comes back: picks the rotation up where the interval left it. */
     private void startWallpaperRotation() {
-        refreshMoviesIfDue();
+        refreshPlacesIfDue();
         handler.removeCallbacks(wallTick);
         if (wallpapers.size() < 2 || wallpaperIntervalMs <= 0) return;
         long waited = android.os.SystemClock.elapsedRealtime() - wallShownAt;
@@ -905,10 +864,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     // ---- top shelf -------------------------------------------------------------------------------
 
     private void showHero(int position, float dockTopInRoot) {
-        // The film the picture is of, when there is one; the app's own name is the fallback for
+        // The place the picture is of, when there is one; the app's own name is the fallback for
         // the user's own wallpapers, which carry no title.
-        final String label = movieTitle != null ? movieTitle : adapter.labelAt(position);
-        final String desc = movieTitle != null ? movieOverview : "";
+        final String label = placeName != null ? placeName : adapter.labelAt(position);
+        final String desc = placeName != null ? placeText : "";
+        final String where = placeName != null ? placeCountry : "";
         int color = adapter.ambientColorAt(position);
         heroBottom = dockTopInRoot - HERO_GAP_DP * density;
         float y = heroBottom - heroShelf.getHeight();
@@ -918,7 +878,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             // Snap the shelf instead of sliding and fading it: each of those frames repaints the
             // full-screen panel, and this switch exists for the GPUs that cannot afford it.
             heroShelf.animate().cancel();
-            setHeroText(label, desc);
+            setHeroText(label, where, desc);
             heroShelf.setY(y);
             heroShelf.setTranslationX(0f);
             heroShelf.setAlpha(1f);
@@ -928,7 +888,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
 
         if (!heroShown) {
-            setHeroText(label, desc);
+            setHeroText(label, where, desc);
             heroShelf.setY(y);
             heroShelf.setTranslationX(0f);
             heroShelf.animate().alpha(1f).setDuration(260).start();
@@ -936,14 +896,14 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             heroShown = true;
         } else if (changed) {
             heroShelf.animate().alpha(0f).translationX(-12 * density).setDuration(120).withEndAction(() -> {
-                setHeroText(label, desc);
+                setHeroText(label, where, desc);
                 heroShelf.setY(y);
                 heroShelf.setTranslationX(12 * density);
                 heroShelf.animate().alpha(1f).translationX(0f).setDuration(200).start();
             }).start();
             showAmbient(color);
         } else {
-            // Same words, different app: every dock app shares the film's name, so the colour has
+            // Same words, different app: every dock app shares the place's name, so the colour has
             // to follow focus on its own rather than ride along with a change of text.
             heroShelf.setY(y);
             showAmbient(color);
@@ -1010,9 +970,18 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     /** The shelf's two lines. An empty description takes no room, so the title keeps its place. */
-    private void setHeroText(String title, String desc) {
+    private void setHeroText(String title, String where, String desc) {
         heroName.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, titleSizeSp(title));
         heroName.setText(title);
+        heroWhere.setText(where);
+        heroWhere.setVisibility(where.isEmpty() ? View.GONE : View.VISIBLE);
+        // The description sits further down under a country line; with none, close under the name.
+        ViewGroup.MarginLayoutParams descLp = (ViewGroup.MarginLayoutParams) heroDesc.getLayoutParams();
+        int top = Math.round((where.isEmpty() ? 6f : 9.5f) * density);
+        if (descLp.topMargin != top) {
+            descLp.topMargin = top;
+            heroDesc.setLayoutParams(descLp);
+        }
         heroDesc.setText(desc);
         heroDesc.setVisibility(desc.isEmpty() ? View.GONE : View.VISIBLE);
     }
@@ -1039,37 +1008,37 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     /**
-     * The largest size at which the name still fits the shelf's two lines. Film names run far
-     * longer than app names ("LEGO Star Wars: The Mandalorian"), and a name cut short tells the
+     * The largest size at which the name still fits on one line, up to its share of the width.
+     * Names run longer than app names ("Wroclaw Market Square"), and a name cut short tells the
      * viewer nothing, so a long one is set smaller rather than clipped.
      */
     private float titleSizeSp(String title) {
-        if (title == null || title.isEmpty() || heroMaxWidth <= 0) return HERO_TITLE_MAX_SP;
+        if (title == null || title.isEmpty() || heroNameMaxWidth <= 0) return HERO_TITLE_MAX_SP;
         android.text.TextPaint paint = new android.text.TextPaint(heroName.getPaint());
         float scaled = getResources().getDisplayMetrics().scaledDensity;
         for (float sp = HERO_TITLE_MAX_SP; sp > HERO_TITLE_MIN_SP; sp -= 2f) {
             paint.setTextSize(sp * scaled);
-            android.text.StaticLayout laid = android.text.StaticLayout.Builder
-                    .obtain(title, 0, title.length(), paint, heroMaxWidth).build();
-            if (laid.getLineCount() <= 2) return sp;
+            if (paint.measureText(title) <= heroNameMaxWidth) return sp;
         }
         return HERO_TITLE_MIN_SP;
     }
 
     /**
-     * Follows the rotation: the shelf names whichever film is on screen. Called after the picture
+     * Follows the rotation: the shelf names whichever place is on screen. Called after the picture
      * changes, so the words and the picture never disagree.
      */
-    private void setMovie(File picture) {
-        String[] about = movieMode ? MovieWallpapers.describe(picture) : null;
+    private void setPlace(File picture) {
+        String[] about = placesMode ? PlaceWallpapers.describe(picture) : null;
         String title = about != null ? titleCase(about[0]) : null;
         String overview = about != null ? about[1] : "";
-        if (title == null ? movieTitle == null : title.equals(movieTitle)) return;
-        movieTitle = title;
-        movieOverview = overview;
+        String country = about != null && about.length > 2 ? about[2] : "";
+        if (title == null ? placeName == null : title.equals(placeName)) return;
+        placeName = title;
+        placeText = overview;
+        placeCountry = country;
         // Redraw in place when the shelf is already up; the layout listener puts it back where it
         // belongs once the new lines have been measured.
-        if (heroShown && title != null) setHeroText(title, overview);
+        if (heroShown && title != null) setHeroText(title, country, overview);
     }
 
     /**
@@ -1123,7 +1092,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      */
     private void holdFirstFrame() {
         final long start = android.os.SystemClock.uptimeMillis();
-        final boolean expectsWallpaper = !wallpapers.isEmpty() || config.wallpaper != null;
+        final boolean expectsWallpaper = !wallpapers.isEmpty() || (config.wallpaper != null && !placesMode);
         root.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
             @Override
             public boolean onPreDraw() {

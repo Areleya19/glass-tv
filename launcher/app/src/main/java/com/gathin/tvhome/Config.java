@@ -60,10 +60,8 @@ final class Config {
     final List<File> wallpapers;
     /** Time between wallpaper changes (wallpaper_seconds, else wallpaper_minutes); 0 changes only when Home starts. */
     final long wallpaperIntervalMs;
-    /** TMDB key for recent-movie wallpapers (tmdb_api_key, config.json only); empty keeps them off. */
-    final String tmdbApiKey;
-    /** TMDB filters: release region (e.g. MY), genre ids to keep, genre ids to leave out. */
-    final String movieRegion, movieGenres, movieExcludedGenres;
+    /** Pictures of places to visit, renewed weekly (see PlaceWallpapers); "places": false keeps them off. */
+    final boolean places;
     /** Whether the overlay file was present and parsed. */
     final boolean overlayApplied;
 
@@ -74,8 +72,7 @@ final class Config {
                    boolean showHomeSettingsShortcut, boolean showNetworkPill, boolean showLiveTv,
                    int backgroundColor,
                    File wallpaper, List<File> wallpapers, long wallpaperIntervalMs,
-                   String tmdbApiKey, String movieRegion, String movieGenres, String movieExcludedGenres,
-                   boolean overlayApplied) {
+                   boolean places, boolean overlayApplied) {
         this.dockApps = Collections.unmodifiableList(dockApps);
         this.hiddenApps = Collections.unmodifiableList(hiddenApps);
         this.liveTvPackage = liveTvPackage;
@@ -96,10 +93,7 @@ final class Config {
         this.wallpaper = wallpaper;
         this.wallpapers = Collections.unmodifiableList(wallpapers);
         this.wallpaperIntervalMs = wallpaperIntervalMs;
-        this.tmdbApiKey = tmdbApiKey;
-        this.movieRegion = movieRegion;
-        this.movieGenres = movieGenres;
-        this.movieExcludedGenres = movieExcludedGenres;
+        this.places = places;
         this.overlayApplied = overlayApplied;
     }
 
@@ -169,15 +163,13 @@ final class Config {
         int wallpaperMinutes = json != null ? integer(json, "wallpaper_minutes", 30, 0, 1440) : 30;
         int wallpaperSeconds = json != null ? integer(json, "wallpaper_seconds", 0, 5, 86400) : 0;
         long wallpaperIntervalMs = wallpaperSeconds > 0 ? wallpaperSeconds * 1000L : wallpaperMinutes * 60_000L;
-        String tmdbKey = json != null && wallpaperOn ? string(json, "tmdb_api_key", "") : "";
-        String movieRegion = json != null ? string(json, "movie_region", "") : "";
-        String movieGenres = json != null ? string(json, "movie_genres", "") : "";
-        String movieExcluded = json != null ? string(json, "movie_excluded_genres", "") : "";
+        // On unless a theme says otherwise: a fresh install shows places with nothing to set up.
+        boolean places = wallpaperOn && (json == null || bool(json, "places", true));
 
         return new Config(dock, hidden, liveTv, liveTvAction, panelService, panelAction, inputAction,
                 Math.max(1, columns), Math.max(0, rowsBelow), shamsi, moduleCards, reducedMotion,
                 vpn, homeSettings, networkPill, liveTvRow, background, wallpaper, wallpapers, wallpaperIntervalMs,
-                tmdbKey, movieRegion, movieGenres, movieExcluded, applied);
+                places, applied);
     }
 
     /** Reads and parses the overlay; any problem means "no overlay", never a crash on the home screen. */

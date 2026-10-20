@@ -1,7 +1,7 @@
 # Instructions for AI agents
 
 You are helping someone set up **Clean TV** on their own Android TV or Google TV: debloat it, install this
-launcher as the home screen, and optionally turn on movie wallpapers. This file is the playbook. It works for
+launcher as the home screen, with pictures of places behind it. This file is the playbook. It works for
 any brand (Xiaomi, TCL, Sony, Hisense, Philips, OnePlus, NVIDIA Shield, Chromecast, projectors…). Follow it in
 order, and read [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) before you improvise a fix.
 
@@ -28,10 +28,9 @@ works, because Fire OS will not hand Home to another launcher.
 7. **Don't guess what an app is from its name.** Example: on Xiaomi, `com.xiaomi.mitv.smartshare` looks like
    bloat but is the Miracast screen. When unsure, leave it on and ask.
 8. **Credentials stay with the person.** They type passwords, PINs and pairing codes themselves. Never write an
-   API key into the repository; a TMDB key goes only into the theme's `config.json` on their machine.
-9. **Family-friendly by default.** Keep `include_adult=false`, keep horror and thriller excluded, and offer
-   `movie_genres: "16|10751"` (animation or family). Ask about the person's preferences for any images you show
-   them or put in docs.
+   API key or token into the repository.
+9. **Family-friendly by default.** The places pictures skip any picture with people in it; keep it that way.
+   Ask about the person's preferences for any images you show them or put in docs.
 10. **Downloads need a yes.** Say the file name, source and size before downloading tools (Android platform
     tools, JDK 17, Android SDK, GitHub CLI).
 
@@ -100,17 +99,14 @@ A theme is a folder with `config.json` (and optional `wallpaper.jpg` or `wallpap
 {
   "dock_apps": ["com.google.android.youtube.tv", "com.netflix.ninja"],
   "show_network_pill": false,
-  "wallpaper_seconds": 15,
-  "tmdb_api_key": "the person's own key",
-  "movie_region": "MY",
-  "movie_genres": "16|10751"
+  "wallpaper_seconds": 15
 }
 ```
 
 - `dock_apps` beyond the dock's size continue as the first grid rows, in order, so the person can order the
   grid too.
-- **Movie wallpapers**: the person gets a free key at themoviedb.org → Settings → API and pastes it to you or
-  into a local file. Test it from the computer with one `discover/movie` request before pushing.
+- **Places**: on by default, nothing to set up; `"places": false` uses the theme's own pictures and keeps the
+  launcher offline.
 - **Android 10 quirk**: the first time the launcher gains the internet permission, sockets fail with `EPERM`
   until the TV restarts. Ask before restarting it.
 - Point the screensaver at the launcher's clock before disabling the stock screensaver:
@@ -135,9 +131,11 @@ A theme is a folder with `config.json` (and optional `wallpaper.jpg` or `wallpap
   `cd launcher && ./gradlew testReleaseUnitTest assembleRelease`.
 - The original Clean Your TV guide lives in [docs/CLEANYOURTV-README.md](docs/CLEANYOURTV-README.md); the tests
   read its TV table and counts. Keep its relative links pointing one level up (`../`).
-- Keep the launcher light: no new background services, no network use without a TMDB key, one wallpaper bitmap
+- Keep the launcher light: no new background services, no network use but the weekly places pictures (none with
+  `"places": false`), one wallpaper bitmap
   in memory, decoding off the main thread, nothing running while another app is in front.
 - Commits carry only the human author's identity. Don't add AI attribution lines.
 - Credit stays: this project is based on [Clean Your TV](https://github.com/Gathin23/cleanyourtv) by Gathin (MIT).
-  Keep `LICENSE`, `launcher/FONT-LICENSE-OFL.txt` and the TMDB notice in the README.
+  Keep `LICENSE`, `launcher/FONT-LICENSE-OFL.txt` and the note in the README on where the places pictures
+  come from.
 - [PROMPT.md](PROMPT.md) is the original one-paste prompt; this file adds the safety rules and the lessons above.
