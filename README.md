@@ -9,7 +9,7 @@ and swap the ad-filled home screen for a light Apple TV-style launcher — and a
 new set of places every week.
 
 <p>
-  <img src="docs/screenshots/promo-1-home.jpg" width="32%" alt="Your TV, fast and ad-free again: Home with the glass dock and Inputs menu">
+  <img src="docs/screenshots/promo-1-home.jpg" width="32%" alt="Your TV, fast and ad-free again: Home, and the full grid of apps scrolled down">
   <img src="docs/screenshots/promo-2-clock.jpg" width="32%" alt="Ads off, time on: the clock screensaver">
   <img src="docs/screenshots/promo-3-features.jpg" width="32%" alt="Looks like Apple, runs on Android: glass, Inputs, a place a week, your own app order, no ads">
 </p>
