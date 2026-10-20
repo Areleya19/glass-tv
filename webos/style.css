@@ -52,7 +52,8 @@ header { position: absolute; left: 112px; right: 144px; top: 98px; display: flex
               rgba(255, 255, 255, .10) 75%, rgba(255, 255, 255, .85) 100%); }
 
 /* ---- the place shelf ---------------------------------------------------------------------- */
-#hero { position: absolute; left: 112px; bottom: 522px; width: 1100px; z-index: 3; transition: opacity .4s ease; }
+/* Under the apps' layer, so a menu opened over an app sits in front of these lines. */
+#hero { position: absolute; left: 112px; bottom: 522px; width: 1100px; z-index: 1; transition: opacity .4s ease; }
 #hero.out { opacity: 0; transition-duration: .25s; }
 #placeName { font-weight: 300; font-size: 80px; line-height: 92px; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #placeCountry { font-weight: 500; font-size: 32px; letter-spacing: .2em; text-transform: uppercase; margin-top: 10px; color: #ececf2; }

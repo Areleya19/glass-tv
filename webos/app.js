@@ -339,7 +339,6 @@
       var hr = hold.rows[hold.index].el;
       tiles[index(focus)].el.classList.add('focus');
       placeGlider(hold.left + hr.offsetLeft, hold.top + hr.offsetTop, hr.offsetWidth, hr.offsetHeight, 22, 'dark-style');
-      hero.style.opacity = 0;   // the menu sits where the place's lines are
       return;
     }
     if (menu.open) {
