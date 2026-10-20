@@ -1,25 +1,35 @@
 # Instructions for AI agents
 
-You are helping someone set up **Glass TV** on their own TV: debloat it, install this launcher as the home
-screen, with pictures of places behind it. This file is the playbook. It is written for any brand and for any
+You are helping someone set up **Glass TV** on their own TV: on Android TV and Google TV, debloat it and install
+this launcher as the home screen, with pictures of places behind it; on LG webOS, install the webOS app. This file is the playbook. It is written for any brand and for any
 AI model, large or small. Follow it in order, and read [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 before you improvise a fix.
 
-## Will it work on this TV?
+## Which Glass TV to install
 
-Ask the person for the TV's brand and model, and what the Settings → About screen says. Then use this table.
-It is the operating system that matters, not the brand: Hisense, Panasonic, Toshiba, TCL and Philips sell both
-kinds.
+Ask the person for the TV's brand and model, and what the Settings → About screen says. It is the operating
+system that matters, not the brand: Hisense, Panasonic, Toshiba, TCL and Philips sell both kinds. Then pick
+**one** row, and follow only that route.
 
-| The TV or box runs | Debloat | Glass TV home screen |
+| The TV or box runs | Install | Follow |
 |---|---|---|
-| **Android TV or Google TV, Android 8 or newer** (Sony, TCL, Xiaomi, Philips, many Hisense, Sharp, OnePlus, NVIDIA Shield, Chromecast with Google TV, Mi Box, Android projectors…) | yes | yes |
-| Android TV 5, 6 or 7 | yes | no: the launcher needs Android 8 |
-| Fire TV (Amazon sticks, Fire TV Edition TVs) | yes | no: Fire OS takes Home back from any other launcher |
-| Samsung (Tizen), LG (webOS), Roku, VIDAA, Vizio SmartCast, Panasonic My Home Screen, Apple TV | no | no: these can't run Android apps |
+| **Android TV or Google TV, Android 8 or newer** (Sony, TCL, Xiaomi, Philips, many Hisense, Sharp, OnePlus, NVIDIA Shield, Chromecast with Google TV, Mi Box, Android projectors…) | **The Android launcher**: debloat + Glass TV as the home screen + self-cleaning | This file, steps 1 to 7 |
+| Android TV 5, 6 or 7 | Debloat only: the launcher needs Android 8 | Steps 1 to 3, then step 7 |
+| Fire TV (Amazon sticks, Fire TV Edition TVs) | Debloat only: Fire OS takes Home back from any other launcher | Steps 1 to 3, then step 7 |
+| **LG (webOS)** | **The webOS app** (preview): an app you open, not the home screen; no debloat, no cache cleaning | [webos/README.md](webos/README.md) only. Not these steps: they are for Android |
+| Samsung (Tizen), Roku, VIDAA, Vizio SmartCast, Panasonic My Home Screen, Apple TV | Nothing: these cannot run either version | Stop |
 
-If the answer is **no**, say so plainly and stop. Don't look for workarounds. After connecting (step 1), confirm
-it: `ro.build.version.sdk` must be **26 or higher** for the launcher.
+How to tell them apart:
+- **Android**: About shows "Android TV OS" or an Android version, or the setup connects with `tools/tv.py
+  --probe` (step 1). Confirm with `ro.build.version.sdk`: **26 or higher** for the launcher.
+- **webOS**: an LG TV; About shows "webOS TV" and a version. `tools/tv.py` cannot connect to it, and that is
+  expected: webOS has no Android debugging. Only LG's tools (`ares-*`) and Developer Mode reach it.
+- Not sure: ask for a photo of the About screen. Never install the Android launcher on webOS or the webOS app
+  on Android; neither runs on the other.
+
+For a TV that can only get "Nothing" or a partial install, tell the person plainly, and mention the option
+that gives them everything: a Google TV or Android TV box (Chromecast with Google TV, Xiaomi Mi Box, NVIDIA
+Shield) in an HDMI port, set up with the Android route. Don't look for workarounds such as rooting the TV.
 
 The launcher adapts by itself to everything else: 720p, 1080p and 4K screens, TVs with or without HDMI inputs
 or a tuner (sticks and boxes just show fewer inputs), any language. On a weak TV (1 GB of RAM, or the selection

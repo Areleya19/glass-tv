@@ -61,7 +61,8 @@ while you are inside an app.
 
 **Using an AI coding agent** (Claude Code, Codex, Cursor, Copilot…)? Point it at this repository and ask it to
 set up your TV. [AGENTS.md](AGENTS.md) tells any agent, even a small model, how to do it safely on any Android TV or Google
-TV: it first checks that your TV can run it (Samsung, LG, Roku and Fire TV can't run the home screen), then
+TV: it first works out which Glass TV your TV can run (the Android launcher, the LG webOS app, or neither on
+Samsung and Roku), then
 asks before each change, backs up first, never uninstalls, and checks each step with you as it goes.
 
 The full step-by-step guide for debloating and installing is in

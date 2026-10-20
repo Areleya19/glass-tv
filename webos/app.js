@@ -530,6 +530,16 @@
 
   tick();
   setInterval(tick, 10 * 1000);
+  // index.html#stress, or the launch parameter {"stress": "quick"}, runs the stress test
+  // (test/stress.js, left out of the package).
+  var launchParams = '';
+  try { launchParams = window.PalmSystem ? String(window.PalmSystem.launchParams || '') : ''; } catch (e) {}
+  if (/stress/.test(location.hash + launchParams)) {
+    if (/quick/.test(launchParams) && !/quick/.test(location.hash)) location.hash = 'stress-quick';
+    var st = document.createElement('script');
+    st.src = 'test/stress.js';
+    document.body.appendChild(st);
+  }
   loadApps(function (list) {
     apps = ordered(list);
     build();
