@@ -147,17 +147,17 @@ final class ClockFace extends View {
         Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         // A soft shadow under the rim, a little down and to the right.
-        p.setColor(0xCC18191B);
+        p.setColor(0xCC141517);
         p.setMaskFilter(new BlurMaskFilter(12f * unit, BlurMaskFilter.Blur.NORMAL));
         canvas.drawCircle(c + 4f * unit, c + 6f * unit, rim, p);
         p.setMaskFilter(null);
 
         // The rim stands out: lit at the top left, shaded at the bottom right.
-        p.setShader(diagonal(c, rim, 0xFF333437, 0xFF27282A, 0xFF1A1B1E));
+        p.setShader(diagonal(c, rim, 0xFF2B2C2F, 0xFF212224, 0xFF16171A));
         canvas.drawCircle(c, c, rim, p);
 
         // The face is pressed in: lit the other way round.
-        p.setShader(diagonal(c, face, 0xFF1E1F21, 0xFF252629, 0xFF2B2C30));
+        p.setShader(diagonal(c, face, 0xFF1A1A1C, 0xFF1F2023, 0xFF252529));
         canvas.drawCircle(c, c, face, p);
         p.setShader(null);
 
@@ -168,7 +168,7 @@ final class ClockFace extends View {
         canvas.clipPath(clip);
         p.setStyle(Paint.Style.STROKE);
         p.setStrokeWidth(14f * unit);
-        p.setColor(0xB3111214);
+        p.setColor(0xB30E0F11);
         p.setMaskFilter(new BlurMaskFilter(10f * unit, BlurMaskFilter.Blur.NORMAL));
         canvas.drawCircle(c + 6f * unit, c + 6f * unit, 98f * unit, p);
         p.setMaskFilter(null);
@@ -176,7 +176,7 @@ final class ClockFace extends View {
 
         // And catches the light along its bottom right edge.
         p.setStrokeWidth(1.2f * unit);
-        p.setShader(diagonal(c, face, 0xFF141517, 0xFF252528, 0xFF3C3D41));
+        p.setShader(diagonal(c, face, 0xFF111214, 0xFF1F1F22, 0xFF333437));
         canvas.drawCircle(c, c, face - 0.5f * unit, p);
         p.setShader(null);
 
