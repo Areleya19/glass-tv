@@ -610,6 +610,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }, "place-wallpapers").start();
     }
 
+    /** Clears the TV's app caches when due, once Home has sat idle on screen for a while. */
+    private final Runnable cacheClean = () -> {
+        if (hasWindowFocus() && config != null) CacheCleaner.maybeRun(this, config.cacheCleanDays);
+    };
+
     /** Whenever Home comes back: picks the rotation up where the interval left it. */
     private void startWallpaperRotation() {
         refreshPlacesIfDue();
@@ -647,6 +652,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onStop() {
         hiddenSinceResume = true;
+        handler.removeCallbacks(cacheClean);
         super.onStop();
     }
 
@@ -667,6 +673,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         updateInputsButton();
         startWallpaperRotation();
         handler.postDelayed(minuteTick, MINUTE_MS);
+        handler.removeCallbacks(cacheClean);
+        handler.postDelayed(cacheClean, CacheCleaner.IDLE_MS);
         hiddenSinceResume = false;
     }
 

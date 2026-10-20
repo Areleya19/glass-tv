@@ -9,8 +9,33 @@ YouTube launched, reached its main activity, played its UI sounds — and drew
 nothing at all. Clearing the caches freed about 7 GB and fixed it on the spot,
 with no reinstall and no sign-out.
 
-[`tools/cache-clean.sh`](../tools/cache-clean.sh) stops that from building up
-again.
+Glass TV stops that from building up again, on the TV itself. A computer script does the same for several
+TVs at once (below).
+
+## On the TV itself (Glass TV)
+
+Every 15 days, once Home has sat idle on screen for 20 seconds, Glass TV runs `pm trim-caches` on its own
+TV. It also cleans early, at most every 3 days, when storage passes 80 %. No computer is involved, so it
+works the same whether the TV was set up from a Mac, Windows or Linux.
+
+Android lets no installed app clear other apps' caches, so Glass TV asks the TV's own debugging service,
+the one the setup used over Wi-Fi, to run that one command. The first time, the TV shows **Allow USB
+debugging?**: tick **Always allow** and press OK. That means network debugging has to stay on; the TV
+only accepts connections it has allowed this way.
+
+It is built not to get in the way: it only ever sends that one command, never while an app is in front;
+when debugging is off it does nothing; it tries at most once a day; and after three unanswered or declined
+prompts it stops asking.
+
+- Change how often with `"cache_clean_days"` in the theme's `config.json` (1 to 90); `0` turns it off.
+- Clean right now, and show the prompt again: `tools/tv.py 'touch /sdcard/Android/data/com.gathin.tvhome/files/clean-now'`,
+  then press Home and wait 20 seconds.
+- Its log: `logcat -s TvHome.Clean`.
+
+## The computer script
+
+[`tools/cache-clean.sh`](../tools/cache-clean.sh) cleans every TV on the network from a Mac or Linux
+computer, Glass TV or not.
 
 ## What it does
 

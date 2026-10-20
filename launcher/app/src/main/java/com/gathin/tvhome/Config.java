@@ -62,6 +62,8 @@ final class Config {
     final long wallpaperIntervalMs;
     /** Pictures of places to visit, renewed weekly (see PlaceWallpapers); "places": false keeps them off. */
     final boolean places;
+    /** Days between clearing the TV's app caches (see CacheCleaner); 0 never does. */
+    final int cacheCleanDays;
     /** Whether the overlay file was present and parsed. */
     final boolean overlayApplied;
 
@@ -72,7 +74,7 @@ final class Config {
                    boolean showHomeSettingsShortcut, boolean showNetworkPill, boolean showLiveTv,
                    int backgroundColor,
                    File wallpaper, List<File> wallpapers, long wallpaperIntervalMs,
-                   boolean places, boolean overlayApplied) {
+                   boolean places, int cacheCleanDays, boolean overlayApplied) {
         this.dockApps = Collections.unmodifiableList(dockApps);
         this.hiddenApps = Collections.unmodifiableList(hiddenApps);
         this.liveTvPackage = liveTvPackage;
@@ -94,6 +96,7 @@ final class Config {
         this.wallpapers = Collections.unmodifiableList(wallpapers);
         this.wallpaperIntervalMs = wallpaperIntervalMs;
         this.places = places;
+        this.cacheCleanDays = cacheCleanDays;
         this.overlayApplied = overlayApplied;
     }
 
@@ -165,11 +168,13 @@ final class Config {
         long wallpaperIntervalMs = wallpaperSeconds > 0 ? wallpaperSeconds * 1000L : wallpaperMinutes * 60_000L;
         // On unless a theme says otherwise: a fresh install shows places with nothing to set up.
         boolean places = wallpaperOn && (json == null || bool(json, "places", true));
+        int cacheCleanDays = json != null ? integer(json, "cache_clean_days", CacheCleaner.DEFAULT_DAYS, 0, 90)
+                : CacheCleaner.DEFAULT_DAYS;
 
         return new Config(dock, hidden, liveTv, liveTvAction, panelService, panelAction, inputAction,
                 Math.max(1, columns), Math.max(0, rowsBelow), shamsi, moduleCards, reducedMotion,
                 vpn, homeSettings, networkPill, liveTvRow, background, wallpaper, wallpapers, wallpaperIntervalMs,
-                places, applied);
+                places, cacheCleanDays, applied);
     }
 
     /** Reads and parses the overlay; any problem means "no overlay", never a crash on the home screen. */

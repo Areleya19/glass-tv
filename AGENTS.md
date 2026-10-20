@@ -162,6 +162,12 @@ A theme is a folder with `config.json` (and optional `wallpaper.jpg` or `wallpap
 - Point the screensaver at the launcher's clock before disabling the stock screensaver:
   `settings put secure screensaver_components com.gathin.tvhome/.ClockDream`.
 - **Check**: Home restarts within a few seconds with the new settings.
+- **Cache cleaning**: Glass TV clears the TV's app caches itself every 15 days ([docs/cache-clean.md](docs/cache-clean.md)).
+  It needs the TV's permission once. With the person at the TV, run
+  `touch /sdcard/Android/data/com.gathin.tvhome/files/clean-now`, press Home and wait 20 seconds: the TV asks
+  **Allow USB debugging?**; they tick **Always allow** and press OK. **Check**: `logcat -d -s TvHome.Clean`
+  shows `cleared cached files`. It needs network debugging left on; if they would rather switch it off,
+  cleaning stops, nothing else changes.
 
 ### 7. Verify and hand over
 
@@ -172,7 +178,8 @@ A theme is a folder with `config.json` (and optional `wallpaper.jpg` or `wallpap
 - Ask the person to try with the real remote: Home button, Inputs → an HDMI device, playing a video, the mic
   button, screen mirroring, and holding OK on an app to move it.
 - Give them: the restore script (re-enables everything and puts the stock launcher back), where the theme
-  folder is, and a reminder to switch USB debugging off when done.
+  folder is, and the choice about debugging: left on, the TV keeps cleaning its own caches (it only accepts
+  connections it has allowed); switched off, that cleaning stops and nothing else changes.
 - Offer to switch off firmware updates only after explaining the trade-off: updates can bring the bloat back,
   but they also carry security fixes.
 

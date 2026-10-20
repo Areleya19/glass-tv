@@ -38,6 +38,9 @@ every week.
 - **Comes back as you left it.** Back from an app, the app you left is still selected; pressing Home on Home
   goes to the first app. When Android has closed Home to free memory, it comes back whole in one frame,
   with no black screen and no half-built dock.
+- **Keeps itself clean.** Every 15 days, while Home sits idle, the TV clears its app caches, where the Play
+  Store leaves gigabytes of download leftovers that can make apps open to a blank screen. No computer needed,
+  sign-ins and app data are never touched; the TV asks once to allow it.
 - **A clock screensaver.** A grey analog dial with a yellow-orange second hand that ticks, the time and
   date beneath, drifting a little each minute so nothing burns in.
 - **Rows feather out under the top bar** instead of being cut off when you scroll, and the Wi-Fi / Ethernet
@@ -73,9 +76,8 @@ launcher/build-and-install.sh                                 # build the launch
 tools/theme.sh themes/<your theme>                            # push your settings and wallpapers
 ```
 
-To stop the TV's storage filling with Play Store leftovers — which can corrupt
-an app's cache badly enough to leave it launching to a blank screen —
-[`tools/cache-clean.sh`](docs/cache-clean.md) finds the TVs on your network and
+Glass TV clears the TV's caches by itself every 15 days ([how](docs/cache-clean.md)). To clean several TVs
+from one computer instead, [`tools/cache-clean.sh`](docs/cache-clean.md) finds the TVs on your network and
 clears their caches, leaving sign-ins and app data untouched.
 
 ## Places, or pictures of your own
