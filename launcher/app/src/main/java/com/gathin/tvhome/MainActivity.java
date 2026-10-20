@@ -267,13 +267,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         ambient = findViewById(R.id.ambient);
         Backdrop.setWorker(wallDecoder, handler);
         heroShelf = findViewById(R.id.heroShelf);
-        // AM/PM's capitals start where the clock's digits do. The row lines its text up on one
-        // baseline, so AM/PM is lifted by the difference in the two letter heights.
-        TextView clock = findViewById(R.id.clock), amPm = findViewById(R.id.ampm);
-        android.graphics.Rect digits = new android.graphics.Rect(), letters = new android.graphics.Rect();
-        clock.getPaint().getTextBounds("0", 0, 1, digits);
-        amPm.getPaint().getTextBounds("AM", 0, 2, letters);
-        amPm.setTranslationY(digits.top - letters.top);
         heroName = findViewById(R.id.heroName);
         heroDesc = findViewById(R.id.heroDesc);
         // A share of the space between the side paddings, so the description wraps into a column
@@ -299,6 +292,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             date.setTextSize(11f);
             date.setPadding(0, (int) (4 * density), 0, 0);
         }
+        // Beside the clock, AM/PM's capitals start where the digits do, and the date sits on the
+        // digits' baseline: both line up exactly, whatever the sizes.
+        TextView clock = findViewById(R.id.clock), amPm = findViewById(R.id.ampm), dateLine = findViewById(R.id.date);
+        amPm.setTranslationY(ClockDream.capInset(clock, "0") - ClockDream.capInset(amPm, "AM"));
+        findViewById(R.id.dateBlock).setTranslationY(
+                dateLine.getPaint().getFontMetrics().descent - clock.getPaint().getFontMetrics().descent);
         vpnApp = cfg.vpnApp;
         moduleCards = cfg.moduleCards;
         hiddenApps = new HashSet<>(cfg.hiddenApps);

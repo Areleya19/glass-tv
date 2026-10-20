@@ -55,7 +55,8 @@ public class ClockDream extends DreamService {
         ((ViewGroup) content).addView(face, 0, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         TextClock date = findViewById(R.id.dreamDate);
-        String pattern = DateFormat.getBestDateTimePattern(Locale.getDefault(), "MMMdyyyy");
+        // The day and the month in full (in capitals, see dream_clock.xml): WEDNESDAY, OCTOBER 21.
+        String pattern = DateFormat.getBestDateTimePattern(Locale.getDefault(), "EEEEMMMMd");
         date.setFormat12Hour(pattern);
         date.setFormat24Hour(pattern);
         View screen = (View) content.getParent();
