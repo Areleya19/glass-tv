@@ -1,14 +1,15 @@
-# Clean Your TV — with movie wallpapers
+# Clean TV
 
 **A calm, movie-lit home screen for Android TV and Google TV.**
 
-This is cocombee's fork of [CleanYourTV](https://github.com/Gathin23/cleanyourtv) by Gathin, not the
-official project. It keeps everything CleanYourTV does — debloat any Android TV over Wi-Fi, no root, fully reversible, and swap the ad-filled home
-screen for a light Apple TV-style launcher — and adds a home screen that changes with the films that are out now.
+Based on [Clean Your TV](https://github.com/Gathin23/cleanyourtv) by Gathin. Not affiliated with it.
+Clean TV keeps everything Clean Your TV does — debloat any Android TV over Wi-Fi, no root, fully reversible,
+and swap the ad-filled home screen for a light Apple TV-style launcher — and adds a home screen that changes
+with the films that are out now.
 
 ![Home screen with a movie wallpaper](docs/screenshots/home-movie.jpg)
 
-## What this fork adds
+## What Clean TV adds
 
 - **Movie wallpapers that update themselves.** Once a day the TV asks [TMDB](https://www.themoviedb.org) for
   the 10 most popular films of the last 75 days, downloads their backdrops, deletes the old ones and rotates
