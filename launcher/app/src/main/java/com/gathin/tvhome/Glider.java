@@ -167,6 +167,13 @@ final class Glider extends View {
         companionAreas.add(area);
     }
 
+    void removeCompanion(View v) {
+        int i = companions.indexOf(v);
+        if (i < 0) return;
+        companions.remove(i);
+        companionAreas.remove(i);
+    }
+
     /** The target edges, in scroll-free space, in one reused array. */
     private float[] aim(float l, float t, float r, float b, float radius) {
         target[LEFT] = l;

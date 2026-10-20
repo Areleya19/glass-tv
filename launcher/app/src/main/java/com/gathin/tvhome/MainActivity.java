@@ -423,7 +423,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener((oldF, newF) -> {
             boolean onTile = newF != null && newF.getId() == R.id.card;
             if (!onTile) hideGlass();
-            if (!onTile && (newF == null || !isTopPill(newF))) glider.hide();
+            if (!onTile && (newF == null || !(isTopPill(newF) || inInputsMenu(newF)))) glider.hide();
         });
 
         packageFilter.addAction(Intent.ACTION_PACKAGE_ADDED);
@@ -750,6 +750,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // Nothing of ours stays on screen over another app; an undecided prompt simply returns next time.
         if (cardPrompt != null) cardPrompt.dismiss();
         if (openPopup != null) openPopup.dismiss();
+        closeInputs(false);
     }
 
     @Override
@@ -1427,16 +1428,26 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         open(new Intent(inputAction).setDataAndType(uri, "vnd.android.cursor.item/channel"));
     }
 
-    /** Dropdown menu under the Inputs pill: HDMI ports (with connection state), AV and Live TV. */
+    /** The Inputs menu while it is open (see showInputs). */
+    private View inputsMenu;
+    private final int[] menuAt = new int[2], menuGliderAt = new int[2];
+
+    /**
+     * Menu under the Inputs pill: HDMI ports (with connection state), AV and Live TV. It is drawn in
+     * Home's own window rather than a popup window of its own: a new window takes about a quarter of
+     * a second to reach the screen on this TV, so the selection could not glide out of the pill into
+     * it. Here Home's own focus shape glides from the pill to the first row, the way it glides into
+     * the dock's tray, and the menu's glass paints it over itself.
+     */
     private void showInputs() {
-        View anchor = findViewById(R.id.btnInputs);
-        View panel = getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
+        if (inputsMenu != null) return;
+        View anchor = btnInputs;
+        FrameLayout panel = (FrameLayout) getLayoutInflater().inflate(R.layout.popup_inputs, root, false);
         LinearLayout rows = panel.findViewById(R.id.rows);
+        Runnable close = () -> closeInputs(false);
 
         // Compact: as wide as the Inputs pill (a touch wider so "HDMI 1" fits), hanging right below it.
         int width = Math.max(anchor.getWidth(), (int) (150 * density));
-        final PopupWindow popup = glassPopup(panel, width);
-
         TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
         boolean sawNonHdmi = false;
         String tunerId = null;
@@ -1478,13 +1489,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 int state = hdmi && hdmiStateBogus ? -1 : tim.getInputState(id);
                 if (!hdmi && rows.getChildCount() > 0 && !sawNonHdmi) addSeparator(rows);
                 if (!hdmi) sawNonHdmi = true;
-                addInputRow(rows, popup, hdmi ? R.drawable.ic_hdmi : R.drawable.ic_av, label, state,
+                addInputRow(rows, close, hdmi ? R.drawable.ic_hdmi : R.drawable.ic_av, label, state,
                         () -> openInput(id));
             }
         }
         // Nothing to list where there is no TvInputManager: the TV's own source panel switches inputs.
         if (rows.getChildCount() == 0 && !sourcePanelService.isEmpty()) {
-            addInputRow(rows, popup, R.drawable.ic_input, getString(R.string.inputs), -1, this::openSourcePanel);
+            addInputRow(rows, close, R.drawable.ic_input, getString(R.string.inputs), -1, this::openSourcePanel);
         }
         Intent liveTv = liveTvIntent();
         if (liveTv != null && tunerId != null) {
@@ -1495,7 +1506,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (liveTv != null && config.showLiveTv) {
             if (rows.getChildCount() > 0) addSeparator(rows);
             final Intent liveTvIntent = liveTv;
-            addInputRow(rows, popup, R.drawable.ic_livetv, getString(R.string.live_tv), -1, () -> open(liveTvIntent));
+            addInputRow(rows, close, R.drawable.ic_livetv, getString(R.string.live_tv), -1, () -> open(liveTvIntent));
         }
         if (rows.getChildCount() == 0) {
             Toast.makeText(this, R.string.no_inputs, Toast.LENGTH_SHORT).show();
@@ -1504,42 +1515,106 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
         // Fit the widest row: TVs that report a status on every port (Sony) would otherwise squeeze the names out.
         panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
-        popup.setWidth(Math.max(width, panel.getMeasuredWidth()));
+        width = Math.max(width, panel.getMeasuredWidth());
 
-        glideBetweenRows((FrameLayout) panel, rows);
-        // One selection at a time: while the menu is open it lives on the menu's rows, and the
-        // Inputs pill goes back to glass.
-        glider.hide();
-        final boolean[] handedBack = {false};
-        popup.setOnDismissListener(() -> {
-            if (openPopup == popup) openPopup = null;
-            // Closed by Back or by choosing an input: the selection settles back on the pill.
-            if (!handedBack[0] && btnInputs.hasFocus()) moveTopHighlight(btnInputs);
-        });
-        // Up from the first row closes the menu: its dark selection slides up out of the row and
-        // merges into the Inputs pill, ending at the pill's own darkness rather than adding to it.
+        GlassDrawable glass = new GlassDrawable(panel, 20 * density, density, glider, 0.5f, true);
+        panel.setBackground(glass);
+        Backdrop.watch(panel);
+        glider.addCompanion(panel);
+        anchor.getLocationInWindow(menuAt);
+        root.getLocationInWindow(menuGliderAt);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(width, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.leftMargin = Math.max(0, Math.min(menuAt[0] - menuGliderAt[0], root.getWidth() - width));
+        lp.topMargin = menuAt[1] - menuGliderAt[1] + anchor.getHeight() + (int) (10 * density);
+        root.addView(panel, lp);
+        inputsMenu = panel;
+
+        // Focus stays in the menu until it closes. Up from the first row closes it, and the
+        // selection glides back up into the pill.
+        View first = null, last = null;
         for (int i = 0; i < rows.getChildCount(); i++) {
-            View first = rows.getChildAt(i);
-            if (!first.isFocusable()) continue;
-            first.setOnKeyListener((v, keyCode, event) -> {
-                if (keyCode != KeyEvent.KEYCODE_DPAD_UP) return false;
-                if (event.getAction() != KeyEvent.ACTION_DOWN) return true;
-                int[] rowAt = new int[2], gliderAt = new int[2];
-                v.getLocationOnScreen(rowAt);
-                glider.getLocationOnScreen(gliderAt);
-                float l = rowAt[0] - gliderAt[0], t = rowAt[1] - gliderAt[1];
-                gliderOnPill = true;
-                glider.setStyle(Glider.DARK);
-                glider.appearAt(l, t, l + v.getWidth(), t + v.getHeight(), 13 * density);
-                handedBack[0] = true;
-                popup.dismiss();
-                moveTopHighlight(btnInputs);
-                return true;
+            View row = rows.getChildAt(i);
+            if (!row.isFocusable()) continue;
+            if (first == null) first = row;
+            last = row;
+            row.setOnFocusChangeListener((v, has) -> {
+                if (!has) return;
+                // The first row takes focus before it has been laid out: wait for the layout.
+                if (v.isLaidOut() && v.getWidth() > 0) glideToMenuRow(v);
+                else v.post(() -> {
+                    if (v.hasFocus()) glideToMenuRow(v);
+                });
             });
-            break;
         }
-        dropIn(popup, panel, anchor, Gravity.START);
-        rows.getChildAt(0).requestFocus();
+        final View top = first, bottom = last;
+        for (int i = 0; i < rows.getChildCount(); i++) {
+            View row = rows.getChildAt(i);
+            if (!row.isFocusable()) continue;
+            row.setOnKeyListener((v, keyCode, event) -> {
+                boolean down = event.getAction() == KeyEvent.ACTION_DOWN;
+                switch (keyCode) {
+                    case KeyEvent.KEYCODE_DPAD_UP:
+                        if (v != top) return false;
+                        if (down) closeInputs(true);
+                        return true;
+                    case KeyEvent.KEYCODE_DPAD_DOWN:
+                        return v == bottom;
+                    case KeyEvent.KEYCODE_DPAD_LEFT:
+                    case KeyEvent.KEYCODE_DPAD_RIGHT:
+                        return true;
+                    case KeyEvent.KEYCODE_BACK:
+                        if (down) closeInputs(true);
+                        return true;
+                    default:
+                        return false;
+                }
+            });
+        }
+
+        // The glass and the rows fade in around the selection as it arrives.
+        glass.setAlpha(0);
+        rows.setAlpha(0f);
+        rows.setTranslationY(-8 * density);
+        android.animation.ValueAnimator in = android.animation.ValueAnimator.ofFloat(0f, 1f);
+        in.setDuration(220);
+        in.setInterpolator(new android.view.animation.DecelerateInterpolator(1.6f));
+        in.addUpdateListener(an -> {
+            float f = (float) an.getAnimatedValue();
+            glass.setAlpha(Math.round(255 * f));
+            rows.setAlpha(f);
+            rows.setTranslationY(-8 * density * (1f - f));
+        });
+        in.start();
+        if (top != null) top.requestFocus();
+    }
+
+    /** Glides Home's focus shape onto a row of the Inputs menu. */
+    private void glideToMenuRow(View row) {
+        row.getLocationInWindow(menuAt);
+        glider.getLocationInWindow(menuGliderAt);
+        float l = menuAt[0] - menuGliderAt[0], t = menuAt[1] - menuGliderAt[1];
+        gliderOnPill = true;
+        glider.setStyle(Glider.DARK);
+        glider.moveTo(l, t, l + row.getWidth(), t + row.getHeight(), 13 * density);
+    }
+
+    /** Closes the Inputs menu; with {@code toPill}, focus and the selection go back to the Inputs pill. */
+    private void closeInputs(boolean toPill) {
+        View panel = inputsMenu;
+        if (panel == null) return;
+        inputsMenu = null;
+        if (toPill) btnInputs.requestFocus();
+        panel.animate().alpha(0f).setDuration(reducedMotion ? 80 : 150).withEndAction(() -> {
+            glider.removeCompanion(panel);
+            root.removeView(panel);
+        }).start();
+    }
+
+    private boolean inInputsMenu(View v) {
+        for (View p = v; p != null && inputsMenu != null; p = p.getParent() instanceof View ? (View) p.getParent() : null) {
+            if (p == inputsMenu) return true;
+        }
+        return false;
     }
 
     private PopupWindow glassPopup(View panel, int width) {
@@ -1556,40 +1631,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         });
         openPopup = popup;
         return popup;
-    }
-
-    /**
-     * The Inputs list's focus: the same dark shape as the rest of Home, gliding from row to row
-     * behind them instead of each row lighting up on its own.
-     */
-    private void glideBetweenRows(FrameLayout panel, LinearLayout rows) {
-        Glider rowGlider = new Glider(this, reducedMotion);
-        panel.addView(rowGlider, 0, new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        float radius = 13 * density;
-        for (int i = 0; i < rows.getChildCount(); i++) {
-            View row = rows.getChildAt(i);
-            if (!row.isFocusable()) continue;
-            row.setOnFocusChangeListener((v, has) -> {
-                if (!has) return;
-                // The first row takes focus as the list opens, before it has been laid out: wait for
-                // the layout rather than glide to a row that has no size yet.
-                if (v.isLaidOut() && v.getWidth() > 0) glideToRow(rowGlider, rows, v, radius);
-                else v.post(() -> {
-                    if (v.hasFocus()) glideToRow(rowGlider, rows, v, radius);
-                });
-            });
-        }
-    }
-
-    /**
-     * Layout positions, not on-screen ones: the list unfolds with a scale and a slide as it opens,
-     * and both the glider and the rows move with it.
-     */
-    private void glideToRow(Glider rowGlider, LinearLayout rows, View row, float radius) {
-        float l = rows.getLeft() - rowGlider.getLeft() + row.getLeft();
-        float t = rows.getTop() - rowGlider.getTop() + row.getTop();
-        rowGlider.moveTo(l, t, l + row.getWidth(), t + row.getHeight(), radius);
     }
 
     /** Drop in: fade and unfold from the top edge, hanging under the anchor pill. */
@@ -1612,7 +1653,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         rows.addView(line, lp);
     }
 
-    private void addInputRow(LinearLayout rows, PopupWindow popup, int iconRes, String title, int state, Runnable action) {
+    private void addInputRow(LinearLayout rows, Runnable close, int iconRes, String title, int state, Runnable action) {
         View row = getLayoutInflater().inflate(R.layout.item_input, rows, false);
         ((ImageView) row.findViewById(R.id.icon)).setImageResource(iconRes);
         ((TextView) row.findViewById(R.id.title)).setText(title);
@@ -1631,7 +1672,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             dot.setVisibility(View.GONE);
         }
         row.setOnClickListener(v -> {
-            popup.dismiss();
+            close.run();
             action.run();
         });
         rows.addView(row);

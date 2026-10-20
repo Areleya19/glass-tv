@@ -24,6 +24,10 @@ final class GlassDrawable extends Drawable {
     private final Paint veil = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final GlassRim rim;
     private final Glider highlight;
+    /** Paints the focus shape over the glass (a menu), rather than fading the glass for it (a pill). */
+    private final boolean paintsShape;
+    /** How far the glass is shown, 0 to 1, for a panel fading in or out. */
+    private float fade = 1f;
     private final int[] at = new int[2], highlightAt = new int[2];
     private final RectF rect = new RectF();
 
@@ -33,6 +37,16 @@ final class GlassDrawable extends Drawable {
 
     /** {@code reach} as in GlassRim: larger panels keep the shine to the corners. */
     GlassDrawable(View owner, float radius, float density, Glider highlight, float reach) {
+        this(owner, radius, density, highlight, reach, false);
+    }
+
+    /**
+     * With {@code paintsShape}, the focus shape is painted over this glass and under what the panel
+     * holds, as the dock's tray paints it: the shape glides in from outside the panel and the glass
+     * never hides it.
+     */
+    GlassDrawable(View owner, float radius, float density, Glider highlight, float reach, boolean paintsShape) {
+        this.paintsShape = paintsShape;
         this.owner = owner;
         this.highlight = highlight;
         this.radius = radius;
@@ -47,16 +61,24 @@ final class GlassDrawable extends Drawable {
         // shape covers, the fainter the glass, until a focused pill is the fill alone. As the shape
         // leaves, the glass comes back the same way.
         float covered = 0f;
-        if (highlight != null && highlight.isShowing()) {
+        if (highlight != null && highlight.isShowing() && !paintsShape) {
             owner.getLocationInWindow(at);
             highlight.getLocationInWindow(highlightAt);
             covered = highlight.coverage(highlightAt[0] - at[0], highlightAt[1] - at[1], rect.width(), rect.height());
         }
-        float glass = 1f - covered;
+        float glass = (1f - covered) * fade;
         if (glass > 0f) {
             fill.draw(canvas, owner, rect, radius, glass);
             veil.setAlpha(Math.round(VEIL_ALPHA * glass));
             canvas.drawRoundRect(rect, radius, radius, veil);
+            if (paintsShape && highlight != null && highlight.isShowing()) {
+                owner.getLocationInWindow(at);
+                highlight.getLocationInWindow(highlightAt);
+                canvas.save();
+                canvas.clipRect(getBounds());
+                highlight.drawShape(canvas, highlightAt[0] - at[0], highlightAt[1] - at[1], owner);
+                canvas.restore();
+            }
             float half = rim.paint.getStrokeWidth() / 2f;
             rect.inset(half, half);
             rim.fit(rect);
@@ -69,6 +91,8 @@ final class GlassDrawable extends Drawable {
 
     @Override
     public void setAlpha(int alpha) {
+        fade = alpha / 255f;
+        invalidateSelf();
     }
 
     @Override
