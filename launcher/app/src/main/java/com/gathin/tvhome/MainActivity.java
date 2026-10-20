@@ -1036,9 +1036,17 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         placeName = title;
         placeText = overview;
         placeCountry = country;
-        // Redraw in place when the shelf is already up; the layout listener puts it back where it
+        // When the shelf is up, the words fade out with the old picture and back in with the new
+        // one, inside the picture's own cross-fade: swapped at once, the next place's name sat over
+        // the last one's picture while it faded. The layout listener puts the shelf back where it
         // belongs once the new lines have been measured.
-        if (heroShown && title != null) setHeroText(title, country, overview);
+        if (heroShown && title != null) {
+            heroShelf.animate().cancel();
+            heroShelf.animate().alpha(0f).setDuration(reducedMotion ? 100 : 250).withEndAction(() -> {
+                setHeroText(title, country, overview);
+                if (heroShown) heroShelf.animate().alpha(1f).setDuration(reducedMotion ? 120 : 400).start();
+            }).start();
+        }
     }
 
     /**

@@ -78,8 +78,7 @@ public class ClockDream extends DreamService {
         TextView date = findViewById(R.id.dreamDate);
         time.setTextSize(TypedValue.COMPLEX_UNIT_PX, 44f * u);
         amPm.setTextSize(TypedValue.COMPLEX_UNIT_PX, 14f * u);
-        // The same size as Home's date.
-        date.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f);
+        date.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f);
 
         // The tops of the digits sit 34 units under the rim, below the room the dial keeps for its shadow.
         LinearLayout.LayoutParams row = (LinearLayout.LayoutParams) findViewById(R.id.dreamTimeRow).getLayoutParams();
