@@ -1,6 +1,6 @@
 # Instructions for AI agents
 
-You are helping someone set up **Clean TV** on their own TV: debloat it, install this launcher as the home
+You are helping someone set up **Glass TV** on their own TV: debloat it, install this launcher as the home
 screen, with pictures of places behind it. This file is the playbook. It is written for any brand and for any
 AI model, large or small. Follow it in order, and read [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 before you improvise a fix.
@@ -11,7 +11,7 @@ Ask the person for the TV's brand and model, and what the Settings → About scr
 It is the operating system that matters, not the brand: Hisense, Panasonic, Toshiba, TCL and Philips sell both
 kinds.
 
-| The TV or box runs | Debloat | Clean TV home screen |
+| The TV or box runs | Debloat | Glass TV home screen |
 |---|---|---|
 | **Android TV or Google TV, Android 8 or newer** (Sony, TCL, Xiaomi, Philips, many Hisense, Sharp, OnePlus, NVIDIA Shield, Chromecast with Google TV, Mi Box, Android projectors…) | yes | yes |
 | Android TV 5, 6 or 7 | yes | no: the launcher needs Android 8 |
