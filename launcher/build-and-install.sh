@@ -21,6 +21,21 @@ export MSYS_NO_PATHCONV=1
 # the setup wizard, or another third-party launcher, none of which should be disabled by accident.
 # Pass STOCK_LAUNCHER=<package> to name it yourself, or STOCK_LAUNCHER=none to disable nothing.
 KNOWN_STOCK_LAUNCHERS="com.google.android.tvlauncher com.google.android.apps.tv.launcherx com.google.android.leanbacklauncher com.mitv.tvhome"
+# Refuse a TV the home screen cannot run on before anything changes, and say why.
+SDK=$("$PY" -I ../tools/tv.py 'getprop ro.build.version.sdk' | tail -n 1 | tr -d '\r ') || {
+  echo "ERROR: could not reach the TV. Check TV_HOST and the debugging prompt on the TV. Nothing was changed." >&2; exit 1; }
+if [ "${SDK:-0}" -lt 26 ] 2>/dev/null; then
+  echo "ERROR: this TV runs Android API $SDK; the Glass TV home screen needs Android 8 (API 26) or newer." >&2
+  echo "Debloating still works (tools/disable.sh). Nothing was changed." >&2; exit 1
+fi
+MAKER=$("$PY" -I ../tools/tv.py 'getprop ro.product.manufacturer' | tail -n 1 | tr -d '\r')
+if [ "$MAKER" = Amazon ]; then
+  echo "ERROR: this is a Fire TV. Fire OS takes Home back from any other launcher, so the Glass TV home screen" >&2
+  echo "cannot stay. Debloating still works (tools/disable.sh). Nothing was changed." >&2; exit 1
+fi
+# Where Home goes now, so a failed install can put it back exactly.
+ORIG_HOME=$("$PY" -I ../tools/tv.py 'cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME' \
+  | tail -n 1 | tr -d '\r')
 if [ -z "${STOCK_LAUNCHER:-}" ]; then
   HOME_PKG=$("$PY" -I ../tools/tv.py 'cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME' \
     | tail -n 1 | tr -d '\r' | cut -d/ -f1) || {
@@ -60,6 +75,52 @@ echo "Stock launcher: $STOCK_LAUNCHER"
 if [ "$STOCK_LAUNCHER" = none ]; then DISABLE_STOCK="echo stock launcher left alone"
 else DISABLE_STOCK="pm disable-user --user 0 $STOCK_LAUNCHER"; fi
 APK=app/build/outputs/apk/release/app-release.apk
+
+# The safeguard. From the install on, any failure (a check below, or a dropped connection that stops the
+# script) puts the TV back as it was: Glass TV removed, the original launcher enabled and made Home again.
+# SAFEGUARD_TEST=start|home makes that check fail on purpose and prints the rollback instead of running it.
+ARMED=0
+rollback() {
+  [ "$ARMED" = 1 ] || return 0
+  ARMED=0
+  echo "Putting the TV back the way it was..." >&2
+  # The launcher to bring back: the one disabled above, or, when Glass TV was already Home, any known stock
+  # launcher an earlier install disabled.
+  local restore="" k
+  if [ "$STOCK_LAUNCHER" != none ]; then restore=$STOCK_LAUNCHER
+  else
+    local disabled
+    disabled=$("$PY" -I ../tools/tv.py 'pm list packages -d' 2>/dev/null | tr -d '\r' | sed 's/^package://') || true
+    for k in $KNOWN_STOCK_LAUNCHERS; do printf '%s\n' "$disabled" | grep -qx "$k" && restore="$restore $k"; done
+  fi
+  local cmds="pm uninstall com.gathin.tvhome"
+  for k in $restore; do cmds="$cmds
+pm enable --user 0 $k"; done
+  case "$ORIG_HOME" in
+    com.gathin.tvhome/*|android|"") ;;
+    */*) cmds="$cmds
+cmd package set-home-activity --user 0 $ORIG_HOME" ;;
+  esac
+  cmds="$cmds
+input keyevent KEYCODE_HOME"
+  if [ -n "${SAFEGUARD_TEST:-}" ]; then
+    printf 'SAFEGUARD_TEST: would run on the TV:\n%s\n' "$cmds" >&2
+  elif printf '%s\n' "$cmds" | "$PY" -I ../tools/tv.py --batch >/dev/null 2>&1; then
+    echo "Done: Glass TV removed and the TV's own home screen is back${restore:+ ($restore)}." >&2
+  else
+    echo "Could not reach the TV to undo it. Once it is back on the network, run:" >&2
+    echo "  TV_HOST=$TV_HOST tools/restore.sh <your debloat list>${restore:+ $restore}" >&2
+  fi
+}
+trap 'st=$?; [ $st -ne 0 ] && rollback; exit $st' EXIT
+# Glass TV in front, and the same process a few seconds later (not crashing and restarting).
+healthy() {
+  [ "${SAFEGUARD_TEST:-}" = "$1" ] && return 1
+  local s p1 p2 f
+  s=$("$PY" -I ../tools/tv.py 'sleep 4; a=$(pidof com.gathin.tvhome); sleep 3; b=$(pidof com.gathin.tvhome); f=$(dumpsys window 2>/dev/null | grep -m1 mCurrentFocus); echo "$a|$b|$f"' | tail -n 1 | tr -d '\r') || return 1
+  p1=${s%%|*}; s=${s#*|}; p2=${s%%|*}; f=${s#*|}
+  [ -n "$p1" ] && [ "$p1" = "$p2" ] && case "$f" in *com.gathin.tvhome*) return 0 ;; *) return 1 ;; esac
+}
 "$PY" -I ../tools/b64push.py "$APK" /data/local/tmp/tvhome.apk
 # Install on its own: in the batch below a failed install (e.g. "not enough space" on a full /data)
 # would not stop the stock launcher from being disabled.
@@ -69,10 +130,18 @@ case "$OUT" in
   *Success*) ;;
   *) echo "ERROR: pm install failed; the stock launcher was left untouched." >&2; exit 1 ;;
 esac
+ARMED=1
 printf '%s\n' \
   "pm grant com.gathin.tvhome android.permission.ACCESS_FINE_LOCATION 2>/dev/null; echo location-granted" \
   "cmd package compile -m speed -f com.gathin.tvhome" \
   "am start -W -n com.gathin.tvhome/.MainActivity | grep -E '^(Status|Error)'" \
+  | "$PY" -I ../tools/tv.py --batch
+# Check it really runs on this TV before the TV's own launcher is touched.
+if ! healthy start; then
+  echo "ERROR: Glass TV did not start properly on this TV (it is not in front, or it keeps restarting)." >&2
+  exit 1
+fi
+printf '%s\n' \
   "$DISABLE_STOCK" \
   "cmd package set-home-activity --user 0 com.gathin.tvhome/.MainActivity" \
   | "$PY" -I ../tools/tv.py --batch
@@ -85,12 +154,18 @@ HOME_NOW=$("$PY" -I ../tools/tv.py 'cmd package resolve-activity --brief -c andr
 case "$HOME_NOW" in
   com.gathin.tvhome/*) echo "Home now resolves to $HOME_NOW" ;;
   *)
-    [ "$STOCK_LAUNCHER" = none ] || "$PY" -I ../tools/tv.py "pm enable --user 0 $STOCK_LAUNCHER" >/dev/null || true
-    echo "ERROR: Home resolves to ${HOME_NOW:-nothing}, not to the new launcher; $STOCK_LAUNCHER was re-enabled." >&2
+    echo "ERROR: Home resolves to ${HOME_NOW:-nothing}, not to the new launcher." >&2
     echo "On Google TV this usually means com.google.android.tungsten.setupwraith also claims Home: add it to" >&2
     echo "your debloat list (see README, Troubleshooting), apply the list, then run this script again." >&2
     exit 1 ;;
 esac
+# Press Home the way the remote does, and check Glass TV answers and stays up.
+"$PY" -I ../tools/tv.py 'input keyevent KEYCODE_HOME' >/dev/null
+if ! healthy home; then
+  echo "ERROR: pressing Home did not bring up a working Glass TV." >&2
+  exit 1
+fi
+ARMED=0
 
 # Optional accessibility services. Off unless asked for, and Android switches them off again on
 # every reinstall, so pass the flag each time you run this script.

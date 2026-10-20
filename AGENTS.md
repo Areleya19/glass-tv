@@ -122,9 +122,15 @@ Written so that any model can follow it to the letter:
 
 ### 5. Install and make it Home
 
-- `TV_HOST=<ip> launcher/build-and-install.sh`. It installs, starts the launcher, disables the stock launcher
-  only after the new one is running, sets the home activity, and puts the stock one back if Home lands
-  elsewhere.
+- `TV_HOST=<ip> launcher/build-and-install.sh` (Windows: `launcher\build-and-install.ps1 -TvHost <ip>`). It has a
+  safeguard that puts the TV back as it was if Glass TV does not work on it:
+  - Before changing anything it refuses Android older than 8 and Fire TV, with a plain message.
+  - It installs and starts Glass TV, and checks it is really in front and not restarting **before** it
+    touches the TV's own launcher.
+  - Only then it disables the stock launcher and makes Glass TV Home, presses Home and checks again.
+  - If any check fails, or the connection drops part-way, it removes Glass TV, re-enables the original
+    launcher, sets it back as Home and presses Home. The debloat list is not touched; `tools/restore.sh`
+    undoes that.
 - Before that, look at the Home list from step 2. Disable any other app there that is neither the stock
   launcher nor this one, after asking (on Xiaomi the factory test app `com.duokan.factorytest`), or the Home
   button can land on it.
