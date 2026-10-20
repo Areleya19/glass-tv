@@ -93,7 +93,9 @@ final class CacheCleaner {
     private static void clean(Context ctx, int before) {
         SharedPreferences p = prefs(ctx);
         try {
-            if (shell(ctx)) {
+            // Once the prompt is answered the TV saves the key, but the connection that asked is not
+            // always let through: a fresh one, with no second prompt, finds the key allowed.
+            if (shell(ctx, true) || shell(ctx, false)) {
                 p.edit().putLong("cleaned", System.currentTimeMillis()).putInt("declined", 0).apply();
                 Log.i(TAG, "cleared cached files, storage " + before + "% -> " + usedPercent() + "% used");
             } else {
@@ -131,8 +133,11 @@ final class CacheCleaner {
     private static final byte[] SHA1_PREFIX = {0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02,
             0x1a, 0x05, 0x00, 0x04, 0x14};
 
-    /** Runs {@link #COMMAND}. False when the TV did not let this app in; IOException when unreachable. */
-    private static boolean shell(Context ctx) throws Exception {
+    /**
+     * Runs {@link #COMMAND}. False when the TV did not let this app in; IOException when unreachable.
+     * {@code mayAsk} false never shows the prompt: it only succeeds once the key is allowed.
+     */
+    private static boolean shell(Context ctx, boolean mayAsk) throws Exception {
         KeyPair keys = keys(ctx);
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress("127.0.0.1", PORT), 3000);
@@ -145,9 +150,10 @@ final class CacheCleaner {
                 send(out, AUTH, AUTH_SIGNATURE, 0, sign(keys.getPrivate(), m.data));
                 m = read(in);
                 if (m.cmd == AUTH && m.arg0 == AUTH_TOKEN) {
+                    if (!mayAsk) return false;
                     // Not trusted yet: the TV now asks "Allow USB debugging?". Wait for the answer.
                     send(out, AUTH, AUTH_PUBLIC_KEY, 0, publicKey((RSAPublicKey) keys.getPublic()));
-                    socket.setSoTimeout(90_000);
+                    socket.setSoTimeout(60_000);
                     try {
                         m = read(in);
                     } catch (SocketTimeoutException | EOFException e) {

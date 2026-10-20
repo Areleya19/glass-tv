@@ -19,8 +19,9 @@ TV. It also cleans early, at most every 3 days, when storage passes 80 %. No com
 works the same whether the TV was set up from a Mac, Windows or Linux.
 
 Android lets no installed app clear other apps' caches, so Glass TV asks the TV's own debugging service,
-the one the setup used over Wi-Fi, to run that one command. The first time, the TV shows **Allow USB
-debugging?**: tick **Always allow** and press OK. That means network debugging has to stay on; the TV
+the one the setup used over Wi-Fi, to run that one command. The first time, 20 seconds after Home comes up, the TV
+shows **Allow USB debugging?** for up to a minute: tick **Always allow** and press OK. Watch for it: with
+"Always allow" already ticked, a single OK press on the remote answers it, so it can come and go unseen. That means network debugging has to stay on; the TV
 only accepts connections it has allowed this way.
 
 It is built not to get in the way: it only ever sends that one command, never while an app is in front;
