@@ -211,7 +211,9 @@ final class Backdrop {
                 paint.setShader(new BitmapShader(b, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
                 shaderOf = b;
             }
-            owner.getLocationInWindow(at);
+            // Screen position, not window position: popups live in their own window, and the
+            // blurred copy is laid out like the whole screen.
+            owner.getLocationOnScreen(at);
             matrix.setScale(SCALE, SCALE);
             matrix.postTranslate(-at[0], -at[1]);
             // Mid-change, the old picture's blur goes under the new one, which fades in on top.
@@ -230,8 +232,8 @@ final class Backdrop {
             canvas.drawRoundRect(rect, radius, radius, paint);
 
             Bitmap g = glowShape;
-            View root = owner.getRootView();
-            if (g == null || glowAlpha <= 0f || root.getWidth() == 0) return;
+            android.util.DisplayMetrics dm = owner.getResources().getDisplayMetrics();
+            if (g == null || glowAlpha <= 0f || dm.widthPixels == 0) return;
             if (g != glowOf) {
                 glowOld.setShader(new BitmapShader(g, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
                 glowNew.setShader(new BitmapShader(g, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
@@ -247,7 +249,7 @@ final class Backdrop {
                 newColorOf = glowTo;
             }
             // The glow is stretched over the whole screen, as the ambient view stretches it.
-            glowMatrix.setScale(root.getWidth() / (float) g.getWidth(), root.getHeight() / (float) g.getHeight());
+            glowMatrix.setScale(dm.widthPixels / (float) g.getWidth(), dm.heightPixels / (float) g.getHeight());
             glowMatrix.postTranslate(-at[0], -at[1]);
             // The same cross-fade as the room: the old colour fades out as the new one fades in.
             if (glowMix < 1f) {

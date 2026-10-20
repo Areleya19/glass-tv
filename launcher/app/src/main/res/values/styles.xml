@@ -25,4 +25,10 @@
         <item name="android:clickable">true</item>
     </style>
     <style name="TopButton" parent="TopButtonBase" />
+    <!-- The top menu's pills (Inputs, Settings): bright text and icon in every state, because their
+         focus is the gliding dark shape (Glider) rather than a white fill. -->
+    <style name="TopMenuButton" parent="TopButton">
+        <item name="android:textColor">@drawable/top_text</item>
+        <item name="android:drawableTint">@drawable/top_text</item>
+    </style>
 </resources>

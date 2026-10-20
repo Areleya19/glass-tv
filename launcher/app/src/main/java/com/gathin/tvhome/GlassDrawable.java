@@ -11,48 +11,60 @@ import android.view.View;
 import androidx.annotation.NonNull;
 
 /**
- * A top-bar pill in the glass style: the blurred wallpaper behind it, an even veil, and an edge
- * that shines at the top-left and bottom-right (GlassRim), with no brighter top. The glass stays
- * when the pill is focused; the white is the top bar's gliding highlight, painted over it.
+ * A top-bar pill or popup panel in the glass style: the blurred wallpaper behind it, an even veil, and an edge
+ * that shines at the top-left and bottom-right (GlassRim), with no brighter top. A pill's glass fades
+ * out as the top bar's gliding focus fill covers it, and back in as the fill moves away.
  */
 final class GlassDrawable extends Drawable {
 
+    private static final int VEIL_ALPHA = 0x14;
     private final View owner;
     private final float radius;
     private final Backdrop.Fill fill = new Backdrop.Fill();
     private final Paint veil = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final GlassRim rim;
-    private final PillHighlight highlight;
+    private final Glider highlight;
     private final int[] at = new int[2], highlightAt = new int[2];
     private final RectF rect = new RectF();
 
-    GlassDrawable(View owner, float radius, float density, PillHighlight highlight) {
+    GlassDrawable(View owner, float radius, float density, Glider highlight) {
+        this(owner, radius, density, highlight, 1f);
+    }
+
+    /** {@code reach} as in GlassRim: larger panels keep the shine to the corners. */
+    GlassDrawable(View owner, float radius, float density, Glider highlight, float reach) {
         this.owner = owner;
         this.highlight = highlight;
         this.radius = radius;
-        veil.setColor(0x14FFFFFF);
-        rim = new GlassRim(1.5f * density, 0xD9FFFFFF, 0x1AFFFFFF);
+        veil.setColor(0xFFFFFF | VEIL_ALPHA << 24);
+        rim = new GlassRim(1.5f * density, 0xD9FFFFFF, 0x1AFFFFFF, reach);
     }
 
     @Override
     public void draw(@NonNull Canvas canvas) {
         rect.set(getBounds());
-        fill.draw(canvas, owner, rect, radius, 1f);
-        canvas.drawRoundRect(rect, radius, radius, veil);
-        float half = rim.paint.getStrokeWidth() / 2f;
-        rect.inset(half, half);
-        rim.fit(rect);
-        canvas.drawRoundRect(rect, radius - half, radius - half, rim.paint);
-        // The top bar's focus shape glides behind the pills. Over this pill, paint the part of it
-        // that overlaps on top of the glass, so the white slides across glass that stays put.
+        // The glass gives way to the focus fill as it arrives: the more of this pill the gliding
+        // shape covers, the fainter the glass, until a focused pill is the fill alone. As the shape
+        // leaves, the glass comes back the same way.
+        float covered = 0f;
         if (highlight != null && highlight.isShowing()) {
             owner.getLocationInWindow(at);
             highlight.getLocationInWindow(highlightAt);
-            canvas.save();
-            canvas.clipRect(getBounds());
-            highlight.drawShape(canvas, highlightAt[0] - at[0], highlightAt[1] - at[1]);
-            canvas.restore();
+            covered = highlight.coverage(highlightAt[0] - at[0], highlightAt[1] - at[1], rect.width(), rect.height());
         }
+        float glass = 1f - covered;
+        if (glass > 0f) {
+            fill.draw(canvas, owner, rect, radius, glass);
+            veil.setAlpha(Math.round(VEIL_ALPHA * glass));
+            canvas.drawRoundRect(rect, radius, radius, veil);
+            float half = rim.paint.getStrokeWidth() / 2f;
+            rect.inset(half, half);
+            rim.fit(rect);
+            rim.paint.setAlpha(Math.round(255 * glass));
+            canvas.drawRoundRect(rect, radius - half, radius - half, rim.paint);
+        }
+        // The fill itself is the highlight view behind the pills, showing through as the glass clears;
+        // painting it here as well would darken a focused pill twice over.
     }
 
     @Override

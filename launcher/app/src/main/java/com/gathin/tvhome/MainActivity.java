@@ -87,12 +87,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private FrameLayout root;
     private GlassView glass;
     private View ambient;
-    /** The top bar's gliding focus shape, its two edge springs and scratch positions. */
-    private PillHighlight topHighlight;
-    private SpringAnimation highlightLeft, highlightRight;
-    private boolean topHighlightShown;
-    private float highlightOpacity;
-    private android.animation.ValueAnimator highlightFade;
+    /** The focus: one dark shape gliding between tiles and pills (see Glider). */
+    private Glider glider;
     private final int[] pillAt = new int[2], rootAt = new int[2];
     /** The top-right buttons and the two rectangles used to line them up with the dock. */
     private View topRow, topSettings;
@@ -150,6 +146,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private List<Cards.Card> cards = Collections.emptyList();
     /** The grid has been laid out and focused since the last resume; the card prompt waits for this. */
     private boolean tilesReady;
+    private boolean tilesAnimatedOnce;
+    private static final long RETURN_SETTLE_MS = 6000;
+    /** True while Home rebuilds on return; focus passes through the pills then and must not light them. */
+    private boolean resuming;
     private Dialog cardPrompt;
     /** Set when a decision could not be saved: no more prompts until the next resume, instead of asking in a loop. */
     private boolean promptsPaused;
@@ -286,24 +286,27 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         grid.setLayoutManager(new GridLayoutManager(this, COLUMNS));
         grid.setHasFixedSize(true);
         grid.setItemAnimator(null);
-        grid.addItemDecoration(new DockDecoration(COLUMNS, density));
+        DockDecoration tray = new DockDecoration(COLUMNS, density);
+        grid.addItemDecoration(tray);
         // The top-right buttons line up with the dock, which is only known once the tiles are laid out.
         grid.getViewTreeObserver().addOnGlobalLayoutListener(this::alignTopButtons);
         // Glass shows the blurred wallpaper behind it: the dock tray (drawn by the grid) and the
         // top-bar pills redraw when a new blurred copy is ready.
         Backdrop.watch(grid);
-        setUpTopHighlight();
+        setUpGlider();
+        for (int i = 0; i < grid.getItemDecorationCount(); i++) {
+            if (grid.getItemDecorationAt(i) instanceof DockDecoration) {
+                ((DockDecoration) grid.getItemDecorationAt(i)).setGlider(glider);
+            }
+        }
+        glider.addCompanion(grid);
         for (int id : new int[]{R.id.btnInputs, R.id.btnWifi, R.id.btnSettings}) {
             View pill = findViewById(id);
-            pill.setBackground(new GlassDrawable(pill, 21 * density, density, topHighlight));
-            topHighlight.addPill(pill);
+            pill.setBackground(new GlassDrawable(pill, 21 * density, density, glider));
+            glider.addCompanion(pill);
             Backdrop.watch(pill);
             pill.setOnFocusChangeListener((v, has) -> {
                 if (has) moveTopHighlight(v);
-                // Focus leaving one pill for another lands before this runs; only hide when it left the bar.
-                else handler.post(() -> {
-                    if (!(getCurrentFocus() != null && isTopPill(getCurrentFocus()))) hideTopHighlight();
-                });
             });
         }
         int enterAnim = reducedMotion ? R.anim.tile_enter_reduced : R.anim.tile_enter;
@@ -340,7 +343,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 if (!glassShown) return;
                 glassTargetY -= dy;
                 glassScrollShift -= dy;
-                glass.setTranslationY(glass.getTranslationY() - dy);
+                glider.scrolled(dy);
             }
         });
 
@@ -411,6 +414,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         getWindow().getDecorView().getViewTreeObserver().addOnGlobalFocusChangeListener((oldF, newF) -> {
             boolean onTile = newF != null && newF.getId() == R.id.card;
             if (!onTile) hideGlass();
+            if (!onTile && (newF == null || !isTopPill(newF))) glider.hide();
         });
 
         packageFilter.addAction(Intent.ACTION_PACKAGE_ADDED);
@@ -522,7 +526,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             t.setCrossFadeEnabled(true);
             wallView.setImageDrawable(t);
             t.startTransition(800);
-            if (blur != null) Backdrop.present(blur, 0);
+            // The glass fades to the new picture over the same 800 ms as the wallpaper itself.
+            if (blur != null) Backdrop.present(blur, 800);
             else blurBackdrop(bmp);
             // Drop the old picture once the fade is done, so only one 1080p bitmap stays in memory.
             handler.postDelayed(() -> {
@@ -548,16 +553,19 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         prefs.edit().putInt("index", next).apply();
         wallShownAt = android.os.SystemClock.elapsedRealtime();
         final File file = wallpapers.get(next);
-        // Name the film before the picture is decoded: the sidecar is a few bytes, while waiting
-        // for the decode would show the fallback name at full size and shrink it a moment later.
-        setMovie(file);
+        // On a cold start, name the film straight away: waiting for the decode showed the app's name
+        // at full size and shrank it a moment later. After that the name changes with the picture,
+        // or it would name the next film over the last one's picture while that one decodes.
+        if (movieTitle == null) setMovie(file);
         wallDecoder.execute(() -> {
             android.graphics.Bitmap bmp = movieMode ? centreOnSubject(decodeWallpaper(file)) : decodeWallpaper(file);
             // Blur it here, before it is shown, so the glass changes with the wallpaper, not after it.
             android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
             android.graphics.Bitmap blur = Backdrop.blur(bmp, dm.widthPixels, dm.heightPixels, movieMode ? 0xFF7A7A7A : 0);
             handler.post(() -> {
-                if (!isDestroyed()) setWallpaper(bmp, fade, blur);
+                if (isDestroyed()) return;
+                setWallpaper(bmp, fade, blur);
+                setMovie(file);
             });
         });
     }
@@ -599,7 +607,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         handler.removeCallbacks(wallTick);
         if (wallpapers.size() < 2 || wallpaperIntervalMs <= 0) return;
         long waited = android.os.SystemClock.elapsedRealtime() - wallShownAt;
-        handler.postDelayed(wallTick, Math.max(0, wallpaperIntervalMs - waited));
+        // A picture that fell due while you were in an app waits a few seconds: decoding, blurring
+        // and fading it the moment you come back competed with Home for the TV's slow CPU.
+        handler.postDelayed(wallTick, Math.max(RETURN_SETTLE_MS, wallpaperIntervalMs - waited));
     }
 
     /**
@@ -626,6 +636,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         tilesReady = false;
         promptsPaused = false;
+        resuming = true;
         reloadApps(true);
         updateGreeting();
         updateWifiLabel();
@@ -640,17 +651,25 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         final String returnKey = lastFocusedKey;
         final int returnSlot = lastFocused;
         final boolean restoreFocus = animate || grid.hasFocus();
-        if (restoreFocus) {
+        long started = android.os.SystemClock.uptimeMillis();
+        boolean rebuilt = reloadTiles();
+        // Nothing installed or removed: Home comes back exactly as it was left, with no rebuild and
+        // no shelf, glow or selection fading back in.
+        if (restoreFocus && rebuilt) {
             glassShown = false;
-            glass.setAlpha(0f);
+            glider.hideNow();
             heroShown = false;
             heroShelf.setAlpha(0f);
             ambientShown = false;
             ambient.setAlpha(0f);
             syncGlassGlow();
         }
-        reloadTiles();
-        if (animate && !reducedMotion) grid.scheduleLayoutAnimation();
+        android.util.Log.i("TvHome.Perf", "tiles " + (rebuilt ? "rebuilt" : "unchanged") + " in "
+                + (android.os.SystemClock.uptimeMillis() - started) + " ms");
+        // The tiles rise into place on the first launch only. Replayed on every return from an app,
+        // it showed the glass tray empty for a moment and held Home back while the tiles arrived.
+        if (animate && !reducedMotion && !tilesAnimatedOnce) grid.scheduleLayoutAnimation();
+        if (animate) tilesAnimatedOnce = true;
 
         if (restoreFocus) {
             // Follow the same app, or the nearest remaining slot when it was removed.
@@ -672,15 +691,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * Every step into the card code runs under CardFeature: if it fails, the tiles are the ordinary
      * ones and cards stay off for this process.
      */
-    private void reloadTiles() {
+    private boolean reloadTiles() {
         // Read these before reload(): rebinding can move focus to the first tile and overwrite them.
         final String returnKey = lastFocusedKey;
         final int returnSlot = lastFocused;
         final List<Cards.Card> none = Collections.emptyList();
         cards = moduleCards ? CardFeature.run(() -> Cards.discover(this, hiddenApps, Cards.load(Cards.storeFile(this))), none) : none;
-        adapter.reload(cards.isEmpty() ? none : CardFeature.run(() -> Cards.shown(cards), none));
+        boolean rebuilt = adapter.reload(cards.isEmpty() ? none : CardFeature.run(() -> Cards.shown(cards), none));
         lastFocusedKey = returnKey;
         lastFocused = returnSlot;
+        return rebuilt;
     }
 
     /**
@@ -694,6 +714,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             int pos = adapter.positionOf(returnKey);
             focusTile(pos >= 0 ? pos : returnSlot);
             tilesReady = true;
+            resuming = false;
+            View now = getCurrentFocus();
+            if (now != null && isTopPill(now)) moveTopHighlight(now);
             showCardPrompt();
         });
     }
@@ -758,17 +781,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         glassTargetX = x;
         glassTargetY = y;
-        if (!glassShown) {
-            springX.cancel();
-            springY.cancel();
-            glass.setTranslationX(x);
-            glass.setTranslationY(y);
-            glass.animate().alpha(1f).setDuration(reducedMotion ? 100 : 180).start();
-            glassShown = true;
-        } else {
-            springX.animateToFinalPosition(x);
-            springY.animateToFinalPosition(y - glassScrollShift);
-        }
+        // Exactly the zoomed card, behind it: at rest the app hides it completely, so it adds no
+        // frame of its own and only shows while it travels between places.
+        float cardRadius = AppAdapter.cornerRadius(card.getWidth(), density) * AppAdapter.FOCUS_SCALE;
+        glider.moveTo(x + pad, y + pad, x + w - pad, y + h - pad, cardRadius);
+        glassShown = true;
         View item = (View) card.getParent();
         if (position < COLUMNS) {
             // Dock: park it at the bottom of the screen and show the top shelf for this app.
@@ -869,27 +886,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     /**
-     * One white shape for the top bar that glides between the pills, changing from pill to circle
-     * and back on the way. It is put behind the pills, whose glass steps aside while they are focused.
+     * The one focus shape (Glider) goes behind everything it marks; the pills' glass makes way for it
+     * as it arrives, and the dock tray paints it over its own glass.
      */
-    private void setUpTopHighlight() {
-        topHighlight = new PillHighlight(this);
-        View bar = findViewById(R.id.topButtons);
-        View child = bar;
-        while (child.getParent() != root) child = (View) child.getParent();
-        root.addView(topHighlight, root.indexOfChild(child),
-                new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) (42 * density)));
-        highlightLeft = new SpringAnimation(topHighlight, PillHighlight.LEFT);
-        highlightRight = new SpringAnimation(topHighlight, PillHighlight.RIGHT);
-        for (SpringAnimation s : new SpringAnimation[]{highlightLeft, highlightRight}) {
-            // The same spring as the tile selection, so the bar and the grid move alike.
-            if (reducedMotion) {
-                s.setSpring(new SpringForce().setStiffness(1400f).setDampingRatio(0.95f));
-                s.setMinimumVisibleChange(1.5f);
-            } else {
-                s.setSpring(new SpringForce().setStiffness(900f).setDampingRatio(1.0f));
-            }
-        }
+    private void setUpGlider() {
+        glider = new Glider(this, reducedMotion);
+        // Behind the shelf's text, the pills and the tiles, so it never draws over any of them.
+        root.addView(glider, root.indexOfChild(heroShelf), new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        // The glider replaces the glass selection outright.
+        glass.setVisibility(View.GONE);
     }
 
     private boolean isTopPill(View v) {
@@ -897,44 +903,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         return id == R.id.btnInputs || id == R.id.btnWifi || id == R.id.btnSettings;
     }
 
+    /** Sends the focus shape onto a pill: from a tile it glides up and narrows into the pill. */
     private void moveTopHighlight(View pill) {
+        if (resuming) return;
         pill.getLocationInWindow(pillAt);
-        root.getLocationInWindow(rootAt);
-        float l = pillAt[0] - rootAt[0];
-        float r = l + pill.getWidth();
-        topHighlight.setTranslationY(pillAt[1] - rootAt[1]);
-        if (!topHighlightShown) {
-            // Arriving from the grid: appear on the pill, then glide from there on.
-            highlightLeft.cancel();
-            highlightRight.cancel();
-            topHighlight.setEdges(l, r);
-            fadeTopHighlight(1f, reducedMotion ? 100 : 180);
-            topHighlightShown = true;
-        } else {
-            highlightLeft.animateToFinalPosition(l);
-            highlightRight.animateToFinalPosition(r);
-        }
-    }
-
-    private void hideTopHighlight() {
-        if (!topHighlightShown) return;
-        topHighlightShown = false;
-        fadeTopHighlight(0f, reducedMotion ? 100 : 160);
-    }
-
-    /**
-     * Fades the shape by its own opacity rather than the view's alpha: the pills paint their part of
-     * it too, and they have to fade with it.
-     */
-    private void fadeTopHighlight(float to, long ms) {
-        if (highlightFade != null) highlightFade.cancel();
-        highlightFade = android.animation.ValueAnimator.ofFloat(highlightOpacity, to);
-        highlightFade.setDuration(ms);
-        highlightFade.addUpdateListener(a -> {
-            highlightOpacity = (float) a.getAnimatedValue();
-            topHighlight.setOpacity(highlightOpacity);
-        });
-        highlightFade.start();
+        glider.getLocationInWindow(rootAt);
+        float l = pillAt[0] - rootAt[0], t = pillAt[1] - rootAt[1];
+        // The pills do not scroll with the grid, so the shape stops following the grid's scroll.
+        glassShown = false;
+        glider.moveTo(l, t, l + pill.getWidth(), t + pill.getHeight(), pill.getHeight() / 2f);
     }
 
     /** The shelf's two lines. An empty description takes no room, so the title keeps its place. */
@@ -1113,9 +1090,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     }
 
     private void hideGlass() {
-        if (!glassShown) return;
         glassShown = false;
-        glass.animate().alpha(0f).setDuration(160).start();
     }
 
     // ---- navigation ------------------------------------------------------------------------------
@@ -1412,11 +1387,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
         popup.setWidth(Math.max(width, panel.getMeasuredWidth()));
 
+        glideBetweenRows((FrameLayout) panel, rows);
         dropIn(popup, panel, anchor, Gravity.START);
         rows.getChildAt(0).requestFocus();
     }
 
     private PopupWindow glassPopup(View panel, int width) {
+        // The same glass as the pills and the tray: what is behind it, softened, with a shining edge.
+        panel.setBackground(new GlassDrawable(panel, 20 * density, density, null, 0.5f));
+        Backdrop.watch(panel);
         final PopupWindow popup = new PopupWindow(panel, width, ViewGroup.LayoutParams.WRAP_CONTENT, true);
         popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));   // needed for Back to dismiss
         popup.setOutsideTouchable(true);
@@ -1427,6 +1406,40 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         });
         openPopup = popup;
         return popup;
+    }
+
+    /**
+     * The Inputs list's focus: the same dark shape as the rest of Home, gliding from row to row
+     * behind them instead of each row lighting up on its own.
+     */
+    private void glideBetweenRows(FrameLayout panel, LinearLayout rows) {
+        Glider rowGlider = new Glider(this, reducedMotion);
+        panel.addView(rowGlider, 0, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        float radius = 13 * density;
+        for (int i = 0; i < rows.getChildCount(); i++) {
+            View row = rows.getChildAt(i);
+            if (!row.isFocusable()) continue;
+            row.setOnFocusChangeListener((v, has) -> {
+                if (!has) return;
+                // The first row takes focus as the list opens, before it has been laid out: wait for
+                // the layout rather than glide to a row that has no size yet.
+                if (v.isLaidOut() && v.getWidth() > 0) glideToRow(rowGlider, rows, v, radius);
+                else v.post(() -> {
+                    if (v.hasFocus()) glideToRow(rowGlider, rows, v, radius);
+                });
+            });
+        }
+    }
+
+    /**
+     * Layout positions, not on-screen ones: the list unfolds with a scale and a slide as it opens,
+     * and both the glider and the rows move with it.
+     */
+    private void glideToRow(Glider rowGlider, LinearLayout rows, View row, float radius) {
+        float l = rows.getLeft() - rowGlider.getLeft() + row.getLeft();
+        float t = rows.getTop() - rowGlider.getTop() + row.getTop();
+        rowGlider.moveTo(l, t, l + row.getWidth(), t + row.getHeight(), radius);
     }
 
     /** Drop in: fade and unfold from the top edge, hanging under the anchor pill. */
