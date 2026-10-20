@@ -55,6 +55,11 @@ final class CacheCleaner {
     private static final int FULL_PERCENT = 80;
     private static final long FULL_MIN_GAP_MS = 3 * DAY_MS;
     private static final int MAX_DECLINES = 3;
+    /**
+     * The TV forgets an "Always allow" key that has not connected for 7 days, and would ask again at
+     * every clean. Connecting this often, running nothing, keeps the key remembered.
+     */
+    private static final long CHECK_IN_MS = 3 * DAY_MS;
     private static final int PORT = 5555;
     private static volatile boolean running;
 
@@ -72,11 +77,19 @@ final class CacheCleaner {
         File trigger = Config.dir(ctx) != null ? new File(Config.dir(ctx), "clean-now") : null;
         if (trigger != null && trigger.delete()) {
             p.edit().putInt("declined", 0).apply();
+            // "new-key" beside it makes a fresh key, so the TV asks again: for testing the prompt.
+            if (new File(Config.dir(ctx), "new-key").delete()) {
+                new File(ctx.getFilesDir(), "adbkey").delete();
+                new File(ctx.getFilesDir(), "adbkey.pub").delete();
+            }
         } else {
             if (days <= 0 || p.getInt("declined", 0) >= MAX_DECLINES) return;
             if (now - p.getLong("tried", 0) < DAY_MS) return;
             long since = now - p.getLong("cleaned", 0);
-            if (since < days * DAY_MS && !(used >= FULL_PERCENT && since >= FULL_MIN_GAP_MS)) return;
+            if (since < days * DAY_MS && !(used >= FULL_PERCENT && since >= FULL_MIN_GAP_MS)) {
+                if (p.getLong("cleaned", 0) > 0 && now - p.getLong("seen", 0) >= CHECK_IN_MS) checkIn(ctx);
+                return;
+            }
         }
         running = true;
         p.edit().putLong("tried", now).apply();
@@ -90,13 +103,30 @@ final class CacheCleaner {
         }, "cache-clean").start();
     }
 
+    /** Connects and disconnects, running nothing, so the TV keeps this app's key. Never asks. */
+    private static void checkIn(Context ctx) {
+        running = true;
+        prefs(ctx).edit().putLong("tried", System.currentTimeMillis()).apply();
+        final Context app = ctx.getApplicationContext();
+        new Thread(() -> {
+            try {
+                if (shell(app, false, null)) prefs(app).edit().putLong("seen", System.currentTimeMillis()).apply();
+            } catch (Exception e) {
+                Log.i(TAG, "check-in failed: " + e);
+            } finally {
+                running = false;
+            }
+        }, "cache-clean").start();
+    }
+
     private static void clean(Context ctx, int before) {
         SharedPreferences p = prefs(ctx);
         try {
             // Once the prompt is answered the TV saves the key, but the connection that asked is not
             // always let through: a fresh one, with no second prompt, finds the key allowed.
-            if (shell(ctx, true) || shell(ctx, false)) {
-                p.edit().putLong("cleaned", System.currentTimeMillis()).putInt("declined", 0).apply();
+            if (shell(ctx, true, COMMAND) || shell(ctx, false, COMMAND)) {
+                long now = System.currentTimeMillis();
+                p.edit().putLong("cleaned", now).putLong("seen", now).putInt("declined", 0).apply();
                 Log.i(TAG, "cleared cached files, storage " + before + "% -> " + usedPercent() + "% used");
             } else {
                 p.edit().putInt("declined", p.getInt("declined", 0) + 1).apply();
@@ -134,10 +164,10 @@ final class CacheCleaner {
             0x1a, 0x05, 0x00, 0x04, 0x14};
 
     /**
-     * Runs {@link #COMMAND}. False when the TV did not let this app in; IOException when unreachable.
-     * {@code mayAsk} false never shows the prompt: it only succeeds once the key is allowed.
+     * Runs {@code command} ({@link #COMMAND}, or null to only connect). False when the TV did not let
+     * this app in; IOException when unreachable. {@code mayAsk} false never shows the prompt.
      */
-    private static boolean shell(Context ctx, boolean mayAsk) throws Exception {
+    private static boolean shell(Context ctx, boolean mayAsk, String command) throws Exception {
         KeyPair keys = keys(ctx);
         try (Socket socket = new Socket()) {
             socket.connect(new InetSocketAddress("127.0.0.1", PORT), 3000);
@@ -162,10 +192,11 @@ final class CacheCleaner {
                 }
             }
             if (m.cmd != CNXN) return false;
+            if (command == null) return true;
 
             // Trimming can take a while on a slow TV.
             socket.setSoTimeout(120_000);
-            send(out, OPEN, 1, 0, (COMMAND + "\0").getBytes(StandardCharsets.US_ASCII));
+            send(out, OPEN, 1, 0, (command + "\0").getBytes(StandardCharsets.US_ASCII));
             while (true) {
                 m = read(in);
                 if (m.cmd == WRTE) {

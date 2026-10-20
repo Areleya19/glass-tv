@@ -24,6 +24,9 @@ shows **Allow USB debugging?** for up to a minute: tick **Always allow** and pre
 "Always allow" already ticked, a single OK press on the remote answers it, so it can come and go unseen. That means network debugging has to stay on; the TV
 only accepts connections it has allowed this way.
 
+The TV forgets an allowed key that has not connected for 7 days, so between cleans Glass TV checks in every
+3 days: it connects and disconnects, running nothing, and the TV keeps trusting it without asking again.
+
 It is built not to get in the way: it only ever sends that one command, never while an app is in front;
 when debugging is off it does nothing; it tries at most once a day; and after three unanswered or declined
 prompts it stops asking.
@@ -31,6 +34,8 @@ prompts it stops asking.
 - Change how often with `"cache_clean_days"` in the theme's `config.json` (1 to 90); `0` turns it off.
 - Clean right now, and show the prompt again: `tools/tv.py 'touch /sdcard/Android/data/com.gathin.tvhome/files/clean-now'`,
   then press Home and wait 20 seconds.
+- See the prompt again (to test it): also `touch .../files/new-key` before `clean-now`. Glass TV makes a new key,
+  which the TV has not allowed yet.
 - Its log: `logcat -s TvHome.Clean`.
 
 ## The computer script
