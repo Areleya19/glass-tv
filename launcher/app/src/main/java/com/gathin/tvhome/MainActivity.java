@@ -98,9 +98,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private final Rect alignCard = new Rect(), alignButton = new Rect();
     /** How much of the space between the side paddings the top shelf may use. */
     private static final float HERO_WIDTH_SHARE = 0.40f;
-    private static final float HERO_TITLE_MAX_SP = 48f;
+    private static final float HERO_TITLE_MAX_SP = 42f;
     /** The breathing room between the shelf's last line and the top of the app container. */
-    private static final float HERO_GAP_DP = 52f;
+    private static final float HERO_GAP_DP = 67f;
     private static final float HERO_TITLE_MIN_SP = 26f;
     /** The shelf's width in pixels, worked out once from the screen. */
     private int heroMaxWidth;
@@ -122,7 +122,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private Bitmap ambientShape;
     /** Where the shelf's bottom edge belongs; its top follows once the lines have been measured. */
     private float heroBottom;
-    private TextView greeting;
     private View btnInputs;
     private TextView btnWifi;
     private TextView shamsiDate;
@@ -226,7 +225,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private final Runnable minuteTick = new Runnable() {
         @Override
         public void run() {
-            updateGreeting();
+            updateShamsiDate();
             updateWifiLabel();
             refreshMoviesIfDue();
             handler.postDelayed(this, MINUTE_MS);
@@ -281,7 +280,6 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         heroShelf.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, orr, ob) -> {
             if (heroBottom > 0) v.setY(heroBottom - v.getHeight());
         });
-        greeting = findViewById(R.id.greeting);
         btnWifi = findViewById(R.id.btnWifi);
         if (!cfg.showNetworkPill) btnWifi.setVisibility(View.GONE);
         shamsiDate = findViewById(R.id.shamsiDate);
@@ -292,18 +290,35 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             date.setTextSize(11f);
             date.setPadding(0, (int) (4 * density), 0, 0);
         }
-        // Beside the clock, AM/PM's capitals start where the digits do, and the date sits on the
-        // digits' baseline: both line up exactly, whatever the sizes.
+        // Beside the clock, the date sits on the digits' baseline, and AM/PM rests halfway between
+        // the top of the digits and the top of the date, its letters' foot on that line.
         TextView clock = findViewById(R.id.clock), amPm = findViewById(R.id.ampm), dateLine = findViewById(R.id.date);
-        amPm.setTranslationY(ClockDream.capInset(clock, "0") - ClockDream.capInset(amPm, "AM"));
-        findViewById(R.id.dateBlock).setTranslationY(
-                dateLine.getPaint().getFontMetrics().descent - clock.getPaint().getFontMetrics().descent);
+        View dateBlock = findViewById(R.id.dateBlock);
+        dateBlock.setTranslationY(dateLine.getPaint().getFontMetrics().descent - clock.getPaint().getFontMetrics().descent);
+        // Placed once the whole column is laid out, AM/PM and the date both.
+        ((View) dateBlock.getParent()).addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            android.graphics.Rect cap = new android.graphics.Rect();
+            dateLine.getPaint().getTextBounds("O", 0, 1, cap);
+            float capsAtTop = ClockDream.capInset(clock, "0") - ClockDream.capInset(amPm, "AM");
+            float foot = amPm.getTop() + capsAtTop + amPm.getBaseline();
+            float dateTop = dateBlock.getTop() + dateBlock.getTranslationY() + dateLine.getTop() + dateLine.getBaseline() + cap.top;
+            amPm.setTranslationY(Math.round(capsAtTop + (foot + dateTop) / 2f - foot));
+        });
         vpnApp = cfg.vpnApp;
         moduleCards = cfg.moduleCards;
         hiddenApps = new HashSet<>(cfg.hiddenApps);
 
         grid = findViewById(R.id.grid);
-        grid.setLayoutManager(new GridLayoutManager(this, COLUMNS));
+        grid.setLayoutManager(new GridLayoutManager(this, COLUMNS) {
+            @Override
+            public void onLayoutChildren(RecyclerView.Recycler recycler, RecyclerView.State state) {
+                // The dock's line is set before any row is placed. Set afterwards, the grid kept its
+                // rows where the first layout had put them, and Home came back with the dock and its
+                // tray hundreds of pixels up the screen until focus slid them down.
+                parkDock();
+                super.onLayoutChildren(recycler, state);
+            }
+        });
         grid.setHasFixedSize(true);
         grid.setItemAnimator(null);
         DockDecoration tray = new DockDecoration(COLUMNS, density);
@@ -331,10 +346,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 if (has) moveTopHighlight(v);
             });
         }
-        int enterAnim = reducedMotion ? R.anim.tile_enter_reduced : R.anim.tile_enter;
-        float enterDelay = reducedMotion ? 0f : 0.06f;
-        grid.setLayoutAnimation(new LayoutAnimationController(
-                AnimationUtils.loadAnimation(this, enterAnim), enterDelay));
+        // The apps rise into place on the first launch after the TV starts, and only then. Setting
+        // the animation arms it for the grid's first draw, so on any later fresh start (Android
+        // closing Home while an app was open) it is not set at all: armed, it drew the dock's tray
+        // empty while the apps faded in.
+        if (!tilesAnimatedOnce) {
+            int enterAnim = reducedMotion ? R.anim.tile_enter_reduced : R.anim.tile_enter;
+            float enterDelay = reducedMotion ? 0f : 0.06f;
+            grid.setLayoutAnimation(new LayoutAnimationController(
+                    AnimationUtils.loadAnimation(this, enterAnim), enterDelay));
+        }
         adapter = new AppAdapter(this, this, COLUMNS, cfg);
         grid.setAdapter(adapter);
 
@@ -648,9 +669,24 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         if (intent == null || !intent.hasCategory(Intent.CATEGORY_HOME)) return;
+        // Home pressed on Home goes back to the first app. Home pressed in another app comes back to
+        // the app you left from: resetting then made the selection run from it to the first app.
+        if (hiddenSinceResume) return;
         grid.scrollToPosition(0);
         lastFocused = 0;
         lastFocusedKey = adapter.getItemCount() > 0 ? adapter.keyAt(0) : null;
+    }
+
+    /**
+     * Home went behind another app since it was last resumed. A Home press that brings it back
+     * arrives before onResume, so this tells it apart from a Home press on Home itself.
+     */
+    private boolean hiddenSinceResume;
+
+    @Override
+    protected void onStop() {
+        hiddenSinceResume = true;
+        super.onStop();
     }
 
     @Override
@@ -665,11 +701,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         promptsPaused = false;
         resuming = true;
         reloadApps(true);
-        updateGreeting();
+        updateShamsiDate();
         updateWifiLabel();
         updateInputsButton();
         startWallpaperRotation();
         handler.postDelayed(minuteTick, MINUTE_MS);
+        hiddenSinceResume = false;
     }
 
     /** Rebuilds the tiles (and the module cards), then puts focus back where it was. */
@@ -1426,15 +1463,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     // ---- top bar ---------------------------------------------------------------------------------
 
-    private void updateGreeting() {
-        int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
-        int res;
-        if (hour < 5) res = R.string.good_night;
-        else if (hour < 12) res = R.string.good_morning;
-        else if (hour < 17) res = R.string.good_afternoon;
-        else if (hour < 22) res = R.string.good_evening;
-        else res = R.string.good_night;
-        greeting.setText(res);
+    private void updateShamsiDate() {
         if (shamsi) shamsiDate.setText(Shamsi.today());
     }
 

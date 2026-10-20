@@ -64,8 +64,13 @@ final class MovieWallpapers {
     /** True when a day has passed since the last successful refresh. */
     static boolean due(Context ctx) {
         long last = prefs(ctx).getLong("refreshed_at", 0);
+        // Films kept before descriptions were checked for the TV's language are fetched again once.
+        if (prefs(ctx).getInt("described", 0) < DESCRIBED) return true;
         return System.currentTimeMillis() - last >= REFRESH_MS || list(ctx).isEmpty();
     }
+
+    /** Raised whenever the way descriptions are picked changes, so the kept films are fetched again. */
+    private static final int DESCRIBED = 2;
 
     /**
      * Downloads the current list. Blocking: call from a background thread. Returns true when the
@@ -84,8 +89,8 @@ final class MovieWallpapers {
             StringBuilder q = new StringBuilder("https://api.themoviedb.org/3/discover/movie?include_adult=false"
                     + "&sort_by=popularity.desc&vote_count.gte=20&primary_release_date.gte=" + from
                     + "&primary_release_date.lte=" + to + "&without_genres=" + enc(excluded));
-            // The title and the overview come back in the TV's own language when TMDB has them,
-            // and in English where it does not, which is the same fallback TMDB's own apps use.
+            // The title and the overview come back in the TV's own language when TMDB has them;
+            // where it has no such description it sends another, which describedIn() catches.
             q.append("&language=").append(enc(Locale.getDefault().toLanguageTag()));
             if (!cfg.movieRegion.isEmpty()) q.append("&region=").append(enc(cfg.movieRegion));
             if (!cfg.movieGenres.isEmpty()) q.append("&with_genres=").append(enc(cfg.movieGenres));
@@ -98,29 +103,65 @@ final class MovieWallpapers {
             if (results == null) return false;
 
             Set<String> wanted = new HashSet<>();
+            Locale tv = Locale.getDefault();
             int n = 0;
             for (int i = 0; i < results.length() && n < KEEP; i++) {
                 JSONObject m = results.optJSONObject(i);
                 if (m == null || m.optBoolean("adult", false)) continue;
                 String backdrop = m.optString("backdrop_path", "");
                 if (backdrop.isEmpty() || backdrop.equals("null")) continue;
+                // Only films described in the TV's language: where TMDB has no such description it
+                // sends the film's own (a Malaysian film's in Malay), or nothing at all.
+                String[] about = describedIn(m, tv, cfg, bearer);
+                if (about == null) continue;
                 // The rank leads the name so the rotation follows popularity; the id keeps it unique.
                 String base = String.format(Locale.ROOT, "%02d-%d", n, m.optLong("id"));
                 n++;
                 // w1280 is plenty for a blurred backdrop, and a quarter of the original's pixels on a 1 GB TV.
                 download(d, base + ".jpg", "https://image.tmdb.org/t/p/w1280" + backdrop, wanted);
                 // The shelf names the film, so keep the two fields it shows: title first, overview after.
-                saveText(d, base + ".txt", m.optString("title", ""), m.optString("overview", ""), wanted);
+                saveText(d, base + ".txt", about[0], about[1], wanted);
             }
             if (n == 0) return false;
             // Pictures that dropped out of the list, and leftovers of an interrupted download.
             File[] old = d.listFiles();
             if (old != null) for (File f : old) if (!wanted.contains(f.getName())) f.delete();
-            prefs(ctx).edit().putLong("refreshed_at", now).apply();
+            prefs(ctx).edit().putLong("refreshed_at", now).putInt("described", DESCRIBED).apply();
             return true;
         } catch (Exception e) {
             Log.w(TAG, "refresh failed: " + e);
             return false;
+        }
+    }
+
+    /**
+     * The film's title and description in the TV's language ({@code tv}), or null when TMDB has no
+     * description in it. A film made in that language is described in it by the list itself; any
+     * other is looked up in its translations, the TV's own country first, then any other.
+     */
+    private static String[] describedIn(JSONObject m, Locale tv, Config cfg, boolean bearer) {
+        String title = m.optString("title", ""), overview = m.optString("overview", "");
+        if (tv.getLanguage().equals(m.optString("original_language")) && !overview.isEmpty()) {
+            return new String[]{title, overview};
+        }
+        try {
+            String url = "https://api.themoviedb.org/3/movie/" + m.optLong("id") + "/translations"
+                    + (bearer ? "" : "?api_key=" + enc(cfg.tmdbApiKey));
+            JSONArray all = new JSONObject(new String(get(url, bearer ? cfg.tmdbApiKey : null, 256 * 1024),
+                    StandardCharsets.UTF_8)).optJSONArray("translations");
+            JSONObject best = null;
+            for (int i = 0; all != null && i < all.length(); i++) {
+                JSONObject t = all.optJSONObject(i);
+                if (t == null || !tv.getLanguage().equals(t.optString("iso_639_1"))) continue;
+                JSONObject data = t.optJSONObject("data");
+                if (data == null || data.optString("overview", "").trim().isEmpty()) continue;
+                if (best == null || tv.getCountry().equals(t.optString("iso_3166_1"))) best = data;
+            }
+            if (best == null) return null;
+            String named = best.optString("title", "").trim();
+            return new String[]{named.isEmpty() ? title : named, best.optString("overview").trim()};
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -142,9 +183,13 @@ final class MovieWallpapers {
         wanted.add(name);
         if (title.isEmpty()) return;
         File out = new File(d, name);
-        if (out.isFile() && out.length() > 0) return;
         // One line each, so a stray newline in the overview cannot be read back as a title.
         String body = title.replace('\n', ' ') + "\n" + overview.replace('\n', ' ');
+        // Rewritten when the words change (a description now in the TV's language), else left alone.
+        try {
+            if (out.isFile() && body.equals(new String(java.nio.file.Files.readAllBytes(out.toPath()), StandardCharsets.UTF_8))) return;
+        } catch (Exception ignored) {
+        }
         try (OutputStream os = new FileOutputStream(out)) {
             os.write(body.getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {

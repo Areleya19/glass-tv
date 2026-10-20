@@ -10,15 +10,11 @@
     <string name="not_connected">ไม่มีอุปกรณ์</string>
     <string name="live_tv">ทีวีสด</string>
     <string name="no_inputs">ไม่พบแหล่งสัญญาณ</string>
-    <string name="good_morning">สวัสดีตอนเช้า</string>
-    <string name="good_afternoon">สวัสดีตอนบ่าย</string>
-    <string name="good_evening">สวัสดีตอนเย็น</string>
-    <string name="good_night">สวัสดียามค่ำคืน</string>
     <string name="ethernet">อีเทอร์เน็ต</string>
     <string name="offline">ออฟไลน์</string>
     <string name="not_available">ทีวีเครื่องนี้ไม่รองรับ</string>
     <string name="cant_open">เปิด %1$s ไม่ได้</string>
-    <string name="date_format">EEE  d MMM</string>
+    <string name="date_format">d MMM yyyy</string>
     <string name="dream_name">นาฬิกา</string>
 
     <string name="tile_move">ย้าย</string>

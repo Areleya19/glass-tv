@@ -28,7 +28,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textColor="#FFFFFFFF"
-            android:textSize="48sp"
+            android:textSize="42sp"
             android:fontFamily="@font/outfit"
             android:fontVariationSettings="'wght' 300"
             android:letterSpacing="-0.02"
@@ -43,7 +43,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:textColor="#B3FFFFFF"
-            android:textSize="16sp"
+            android:textSize="14sp"
             android:fontFamily="@font/outfit"
             android:fontVariationSettings="'wght' 300"
             android:lineSpacingExtra="2dp"
@@ -77,25 +77,11 @@
                 <!-- The header texts use gravity left, not start: the launcher lays out left to right
                      (no supportsRtl), and with start a right-to-left script such as Arabic would move to the
                      right edge of these full-width lines instead of staying under the clock. -->
-                <TextView
-                    android:id="@+id/greeting"
-                    android:gravity="left"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:singleLine="true"
-                    android:ellipsize="end"
-                    android:layout_marginStart="0dp"
-                    android:translationY="2dp"
-                    android:textColor="#8CFFFFFF"
-                    android:textSize="12sp"
-                    android:fontFamily="@font/outfit"
-                    android:fontVariationSettings="'wght' 500"
-                    android:letterSpacing="0.22"
-                    android:textAllCaps="true" />
-
+                <!-- The clock keeps the place it had under the greeting that used to sit above it. -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="15dp"
                     android:orientation="horizontal"
                     android:baselineAligned="false">
 
@@ -112,8 +98,9 @@
                         android:letterSpacing="-0.04"
                         android:includeFontPadding="false" />
 
-                    <!-- AM/PM over the date, both starting at the same line: AM/PM level with the top of the
-                         digits and the date on their baseline (both placed exactly in code). -->
+                    <!-- AM/PM over the date, both starting at the same line: the date on the digits'
+                         baseline, AM/PM resting halfway between the top of the digits and the date (placed in
+                         code). -->
                     <FrameLayout
                         android:layout_width="0dp"
                         android:layout_weight="1"
