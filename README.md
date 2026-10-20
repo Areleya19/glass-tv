@@ -9,7 +9,7 @@ and swap the ad-filled home screen for a light Apple TV-style launcher — and a
 new set of places every week.
 
 <p>
-  <img src="docs/screenshots/promo-1-home.jpg" width="32%" alt="Your TV, fast and ad-free again: Home over Mount Sneffels, with the scrolled app grid stacked behind">
+  <img src="docs/screenshots/promo-1-home.jpg" width="32%" alt="Every place, seen through glass: Home over Mount Sneffels on one TV, with the scrolled grid and the Inputs menu fanned out behind">
   <img src="docs/screenshots/promo-2-clock.jpg" width="32%" alt="Ads off, time on: the clock screensaver">
   <img src="docs/screenshots/promo-3-features.jpg" width="32%" alt="Looks like Apple, runs on Android: glass, Inputs, a place a week, your own app order, no ads">
 </p>
