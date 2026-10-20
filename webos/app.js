@@ -147,20 +147,18 @@
 
   /** The Inputs menu, under the Inputs and Settings buttons, as on Android. */
   function buildMenu() {
-    var a = layoutRect(pills[0]), b = layoutRect(pills[1]);
     var glass = document.createElement('div'), items = document.createElement('div');
     glass.id = 'menuGlass';
     glass.className = 'glass';
     items.id = 'menuItems';
     menu.rows = [];
-    var y = 12, sawHdmi = false;
+    var sawHdmi = false;
     inputs.forEach(function (input) {
       var hdmi = /hdmi/.test(input.id);
       if (!hdmi && sawHdmi && !menu.rows.some(function (r) { return !r.hdmi; })) {
         var sep = document.createElement('div');
         sep.className = 'msep';
         items.appendChild(sep);
-        y += 30;
       }
       if (hdmi) sawHdmi = true;
       var row = document.createElement('div');
@@ -168,26 +166,35 @@
       row.innerHTML = (hdmi ? HDMI_ICON : AV_ICON) + '<span></span>';
       row.lastChild.textContent = input.title;
       items.appendChild(row);
-      menu.rows.push({ input: input, hdmi: hdmi, top: y });
-      y += 84;
+      menu.rows.push({ input: input, hdmi: hdmi, el: row });
     });
-    var left = a.left, width = b.left + b.width - a.left, top = a.top + a.height + 19;
-    [glass, items].forEach(function (el) {
-      el.style.left = left + 'px';
-      el.style.top = top + 'px';
-      el.style.width = width + 'px';
-      el.style.height = (y + 12) + 'px';
-      rowsEl.appendChild(el);
+    rowsEl.appendChild(glass);
+    rowsEl.appendChild(items);
+  }
+
+  /**
+   * Puts the menu under the Inputs and Settings buttons, measured when it opens: the buttons change
+   * width once the font has loaded, and a menu placed earlier drifted from them.
+   */
+  function placeMenu() {
+    var a = layoutRect(pills[0]), b = layoutRect(pills[1]), items = $('menuItems');
+    menu.left = a.left;
+    menu.top = a.top + a.height + 19;
+    menu.width = b.left + b.width - a.left;
+    [$('menuGlass'), items].forEach(function (el) {
+      el.style.left = menu.left + 'px';
+      el.style.top = menu.top + 'px';
+      el.style.width = menu.width + 'px';
+      el.style.height = 'auto';
     });
-    menu.top = top;
-    menu.left = left;
-    menu.width = width;
+    $('menuGlass').style.height = items.offsetHeight + 'px';
   }
 
   function openMenu(open) {
     if (open && !inputs.length) { launch('com.webos.app.inputpicker'); return; }
     menu.open = open;
     menu.index = 0;
+    if (open) placeMenu();
     $('menuGlass').classList.toggle('open', open);
     $('menuItems').classList.toggle('open', open);
     show();
@@ -213,8 +220,8 @@
     if (menu.open) {
       // A dark row inside the menu's glass.
       rowsEl.style.transform = 'translateY(0)';
-      var mr = menu.rows[menu.index];
-      placeGlider(menu.left + 12, menu.top + mr.top, menu.width - 24, 84, 22, 'dark-style');
+      var mr = menu.rows[menu.index].el;
+      placeGlider(menu.left + mr.offsetLeft, menu.top + mr.offsetTop, mr.offsetWidth, mr.offsetHeight, 22, 'dark-style');
       hero.style.opacity = 1;
       glow.style.opacity = 0;
       return;
@@ -372,6 +379,10 @@
     if (m) focus = { row: +m[1], col: +m[2] };
     if (/menu/.test(location.hash)) { focus = { row: -1, col: 0 }; openMenu(true); }
     show();
+    // The buttons take their final size once the font is in: measure the selection and menu again.
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(function () { if (menu.open) placeMenu(); show(); });
+    }
   });
   Places.load(function (list) {
     places = list;
