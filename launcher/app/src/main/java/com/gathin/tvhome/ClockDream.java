@@ -12,7 +12,8 @@ import java.util.Random;
 
 /**
  * Screensaver: the launcher's thin clock and date on black, over a slow ambient glow.
- * Every minute the clock drifts to a new spot and the glow shifts colour, so nothing burns in.
+ * The clock sits in the middle of the screen. Every minute it shifts a few pixels around the centre and
+ * the glow changes colour, so nothing burns in while it still reads as centred.
  * No network, no images: cheap enough for a 1 GB TV.
  */
 public class ClockDream extends DreamService {
@@ -86,13 +87,13 @@ public class ClockDream extends DreamService {
         }).start();
     }
 
-    /** A random spot that keeps the whole clock on screen, with the glow centred behind it. */
+    /** The middle of the screen, nudged up to 1.5 % either way, with the glow centred behind it. */
     private void placeClock() {
         View parent = (View) content.getParent();
-        int maxX = Math.max(0, parent.getWidth() - content.getWidth());
-        int maxY = Math.max(0, parent.getHeight() - content.getHeight());
-        float x = maxX * (0.1f + 0.8f * random.nextFloat());
-        float y = maxY * (0.1f + 0.8f * random.nextFloat());
+        float nudgeX = parent.getWidth() * 0.015f * (2f * random.nextFloat() - 1f);
+        float nudgeY = parent.getHeight() * 0.015f * (2f * random.nextFloat() - 1f);
+        float x = (parent.getWidth() - content.getWidth()) / 2f + nudgeX;
+        float y = (parent.getHeight() - content.getHeight()) / 2f + nudgeY;
         content.setX(x);
         content.setY(y);
         if (parent.getWidth() > 0 && parent.getHeight() > 0) {
