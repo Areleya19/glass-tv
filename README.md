@@ -1,13 +1,14 @@
 # Clean TV
 
-**A calm home screen for Android TV and Google TV, with places to visit behind it.**
+**Make your Android TV or Google TV fast and ad-free again: strip out the bloat and ads, free up memory,
+and come home to just your apps, with a new place to visit behind them every week.**
 
 Based on [Clean Your TV](https://github.com/Gathin23/cleanyourtv) by Gathin. Not affiliated with it.
 Clean TV keeps everything Clean Your TV does — debloat any Android TV over Wi-Fi, no root, fully reversible,
 and swap the ad-filled home screen for a light Apple TV-style launcher — and adds a home screen that shows a
 new set of places every week.
 
-![Clean TV home screen, with a place to visit behind the apps](docs/screenshots/home-places.jpg)
+![Clean TV: your TV, fast and ad-free again](docs/screenshots/home-places.jpg)
 
 ## What Clean TV adds
 
