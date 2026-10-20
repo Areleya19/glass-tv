@@ -85,6 +85,7 @@
                     android:singleLine="true"
                     android:ellipsize="end"
                     android:layout_marginStart="0dp"
+                    android:translationY="2dp"
                     android:textColor="#8CFFFFFF"
                     android:textSize="12sp"
                     android:fontFamily="@font/outfit"

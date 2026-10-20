@@ -2,23 +2,19 @@ package com.gathin.tvhome;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.RectF;
-import android.graphics.Shader;
 import android.util.AttributeSet;
 import android.view.View;
 
 /**
- * A translucent glass slab: soft sheen fill, bright top specular, crisp rim and a faint outer glow.
- * One instance floats over the grid and is moved with spring animations between tiles.
+ * The selection: a light rim around the focused tile, in the style of Apple's Liquid Glass, with
+ * no fill, no brighter top and no outer glow, so the app underneath keeps its own brightness. One instance floats over the grid and is moved
+ * with spring animations between tiles.
  */
 public class GlassView extends View {
 
-    private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint specular = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint rim = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint glow = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final GlassRim rim;
     private final RectF rect = new RectF();
     private final float density;
     private float radius;
@@ -27,10 +23,8 @@ public class GlassView extends View {
         super(context, attrs);
         density = getResources().getDisplayMetrics().density;
         radius = 20f * density;
-        rim.setStyle(Paint.Style.STROKE);
-        rim.setStrokeWidth(1.5f * density);
-        rim.setColor(0xCCFFFFFF);
-        glow.setStyle(Paint.Style.STROKE);
+        // The same shining edge as the top-bar pills (GlassDrawable), at the same width.
+        rim = new GlassRim(1.5f * density, 0xD9FFFFFF, 0x1AFFFFFF);
         // Cache the slab as a texture. The spring only changes translation, so the GPU can
         // move it without replaying clipPath and the glow on every frame. That path is
         // software-rendered on the MT5895 and is what makes the highlight crawl.
@@ -43,35 +37,13 @@ public class GlassView extends View {
     }
 
     @Override
-    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
-        super.onSizeChanged(w, h, oldw, oldh);
-        fill.setShader(new LinearGradient(0, 0, 0, h, 0x3DFFFFFF, 0x12FFFFFF, Shader.TileMode.CLAMP));
-        specular.setShader(new LinearGradient(0, 0, 0, h * 0.45f, 0x66FFFFFF, 0x00FFFFFF, Shader.TileMode.CLAMP));
-    }
-
-    @Override
     protected void onDraw(Canvas canvas) {
-        float inset = 6f * density;   // room for the glow
+        // The slab keeps its old size: this inset once made room for an outer glow, and the tile
+        // positions and the spring are measured around it.
+        float inset = 6f * density;
         rect.set(inset, inset, getWidth() - inset, getHeight() - inset);
-
-        // Outer glow: three widening, fading strokes. The hardware layer caches the result, so
-        // they cost one draw, not one per frame of the spring.
-        for (int i = 1; i <= 3; i++) {
-            glow.setStrokeWidth(i * 2f * density);
-            glow.setColor((0x30 / i) << 24 | 0xFFFFFF);
-            float o = i * density;
-            canvas.drawRoundRect(rect.left - o, rect.top - o, rect.right + o, rect.bottom + o, radius + o, radius + o, glow);
-        }
-
-        canvas.drawRoundRect(rect, radius, radius, fill);
-
-        // Sheen across the top 45%: clipRect stays on the GPU (clipPath did not on the MT5895) and
-        // the round rect under it keeps the top corners rounded with a flat bottom edge.
-        canvas.save();
-        canvas.clipRect(rect.left, rect.top, rect.right, rect.top + rect.height() * 0.45f);
-        canvas.drawRoundRect(rect, radius, radius, specular);
-        canvas.restore();
-
-        canvas.drawRoundRect(rect, radius, radius, rim);
+        // A rim only: the slab sits on top of the tile, so any fill would wash the app out.
+        rim.fit(rect);
+        canvas.drawRoundRect(rect, radius, radius, rim.paint);
     }
 }

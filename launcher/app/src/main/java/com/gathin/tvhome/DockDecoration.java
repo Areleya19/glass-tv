@@ -1,32 +1,34 @@
 package com.gathin.tvhome;
 
 import android.graphics.Canvas;
-import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.RectF;
-import android.graphics.Shader;
 import android.view.View;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-/** Draws the tvOS style frosted-glass band behind the first (dock) row and adds a gap below it. */
+/**
+ * Draws the glass tray behind the first (dock) row and adds a gap below it: the blurred wallpaper
+ * behind it, an even veil and a light rim, with no brighter top.
+ */
 public class DockDecoration extends RecyclerView.ItemDecoration {
 
     private final int dockSize;
     private final float density;
     private final Paint band = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint edge = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final GlassRim edge;
+    private final Backdrop.Fill blur = new Backdrop.Fill();
+
     private final RectF rect = new RectF();
 
     DockDecoration(int dockSize, float density) {
         this.dockSize = dockSize;
         this.density = density;
-        // Same glass as the top-bar pills (pill_bg): a light veil over the wallpaper, brighter at the top.
-        edge.setStyle(Paint.Style.STROKE);
-        edge.setStrokeWidth(density);
-        edge.setColor(0x38FFFFFF);
+        // Same glass as the top-bar pills (GlassDrawable): an even veil and a shining edge.
+        band.setColor(0x12FFFFFF);
+        edge = new GlassRim(1.5f * density, 0xD9FFFFFF, 0x1AFFFFFF, 0.5f);
     }
 
     @Override
@@ -63,8 +65,13 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
         float pad = 14 * density;
         rect.inset(-pad, -pad);
         float radius = 26 * density;
-        band.setShader(new LinearGradient(0, rect.top, 0, rect.bottom, 0x2EFFFFFF, 0x14FFFFFF, Shader.TileMode.CLAMP));
+        blur.draw(c, parent, rect, radius, 1f);
         c.drawRoundRect(rect, radius, radius, band);
-        c.drawRoundRect(rect, radius, radius, edge);
+        // Drawn just inside the tray, as the pills draw theirs: a stroke centred on the boundary
+        // spreads over an extra pixel and reads thicker than the pills' edge.
+        float half = edge.paint.getStrokeWidth() / 2f;
+        rect.inset(half, half);
+        edge.fit(rect);
+        c.drawRoundRect(rect, radius - half, radius - half, edge.paint);
     }
 }

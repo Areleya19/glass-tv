@@ -87,6 +87,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private FrameLayout root;
     private GlassView glass;
     private View ambient;
+    /** The top bar's gliding focus shape, its two edge springs and scratch positions. */
+    private PillHighlight topHighlight;
+    private SpringAnimation highlightLeft, highlightRight;
+    private boolean topHighlightShown;
+    private float highlightOpacity;
+    private android.animation.ValueAnimator highlightFade;
+    private final int[] pillAt = new int[2], rootAt = new int[2];
+    /** The top-right buttons and the two rectangles used to line them up with the dock. */
+    private View topRow, topSettings;
+    private final Rect alignCard = new Rect(), alignButton = new Rect();
     /** How much of the space between the side paddings the top shelf may use. */
     private static final float HERO_WIDTH_SHARE = 0.40f;
     private static final float HERO_TITLE_MAX_SP = 48f;
@@ -105,6 +115,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private boolean heroShown;
     /** The glow behind the tiles. It follows every app, while the shelf only names dock apps. */
     private boolean ambientShown;
+
+    /** The colour the glass is blending from, how far along it is, and the blend itself. */
+    private int glowFrom;
+    private float glowMix = 1f;
+    private android.animation.ValueAnimator glowBlend;
+    private Bitmap ambientShape;
     /** Where the shelf's bottom edge belongs; its top follows once the lines have been measured. */
     private float heroBottom;
     private TextView greeting;
@@ -273,6 +289,23 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         grid.addItemDecoration(new DockDecoration(COLUMNS, density));
         // The top-right buttons line up with the dock, which is only known once the tiles are laid out.
         grid.getViewTreeObserver().addOnGlobalLayoutListener(this::alignTopButtons);
+        // Glass shows the blurred wallpaper behind it: the dock tray (drawn by the grid) and the
+        // top-bar pills redraw when a new blurred copy is ready.
+        Backdrop.watch(grid);
+        setUpTopHighlight();
+        for (int id : new int[]{R.id.btnInputs, R.id.btnWifi, R.id.btnSettings}) {
+            View pill = findViewById(id);
+            pill.setBackground(new GlassDrawable(pill, 21 * density, density, topHighlight));
+            topHighlight.addPill(pill);
+            Backdrop.watch(pill);
+            pill.setOnFocusChangeListener((v, has) -> {
+                if (has) moveTopHighlight(v);
+                // Focus leaving one pill for another lands before this runs; only hide when it left the bar.
+                else handler.post(() -> {
+                    if (!(getCurrentFocus() != null && isTopPill(getCurrentFocus()))) hideTopHighlight();
+                });
+            });
+        }
         int enterAnim = reducedMotion ? R.anim.tile_enter_reduced : R.anim.tile_enter;
         float enterDelay = reducedMotion ? 0f : 0.06f;
         grid.setLayoutAnimation(new LayoutAnimationController(
@@ -467,6 +500,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     /** Puts a picture behind everything, cross-fading from the previous one when asked. */
     private void setWallpaper(android.graphics.Bitmap bmp, boolean fade) {
+        setWallpaper(bmp, fade, null);
+    }
+
+    /** With {@code blur} made in advance, the glass changes in step with the picture. */
+    private void setWallpaper(android.graphics.Bitmap bmp, boolean fade, android.graphics.Bitmap blur) {
         if (bmp == null) return;
         if (wallView == null) {
             wallView = new android.widget.ImageView(this);
@@ -484,13 +522,23 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             t.setCrossFadeEnabled(true);
             wallView.setImageDrawable(t);
             t.startTransition(800);
+            if (blur != null) Backdrop.present(blur, 0);
+            else blurBackdrop(bmp);
             // Drop the old picture once the fade is done, so only one 1080p bitmap stays in memory.
             handler.postDelayed(() -> {
                 if (wallBitmap == bmp) wallView.setImageBitmap(bmp);
             }, 900);
         } else {
             wallView.setImageBitmap(bmp);
+            if (blur != null) Backdrop.present(blur, 0);
+            else blurBackdrop(bmp);
         }
+    }
+
+    /** Hands the picture now on screen to the glass, which blurs it once, off the main thread. */
+    private void blurBackdrop(android.graphics.Bitmap bmp) {
+        android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+        Backdrop.update(bmp, dm.widthPixels, dm.heightPixels, movieMode ? 0xFF7A7A7A : 0, wallDecoder, handler);
     }
 
     /** Shows the next picture from the wallpapers folder; the position survives restarts. */
@@ -505,8 +553,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         setMovie(file);
         wallDecoder.execute(() -> {
             android.graphics.Bitmap bmp = movieMode ? centreOnSubject(decodeWallpaper(file)) : decodeWallpaper(file);
+            // Blur it here, before it is shown, so the glass changes with the wallpaper, not after it.
+            android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
+            android.graphics.Bitmap blur = Backdrop.blur(bmp, dm.widthPixels, dm.heightPixels, movieMode ? 0xFF7A7A7A : 0);
             handler.post(() -> {
-                if (!isDestroyed()) setWallpaper(bmp, fade);
+                if (!isDestroyed()) setWallpaper(bmp, fade, blur);
             });
         });
     }
@@ -596,6 +647,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             heroShelf.setAlpha(0f);
             ambientShown = false;
             ambient.setAlpha(0f);
+            syncGlassGlow();
         }
         reloadTiles();
         if (animate && !reducedMotion) grid.scheduleLayoutAnimation();
@@ -795,20 +847,94 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * column count and the screen, so the edge is measured rather than written down.
      */
     private void alignTopButtons() {
-        View row = findViewById(R.id.topButtons);
-        View settings = findViewById(R.id.btnSettings);
+        // This runs on every layout pass, which during a grid scroll is every frame, so it keeps
+        // its views and rectangles rather than looking them up or allocating each time.
+        if (topRow == null) {
+            topRow = findViewById(R.id.topButtons);
+            topSettings = findViewById(R.id.btnSettings);
+        }
+        if (topRow == null || topSettings.getWidth() == 0) return;
         RecyclerView.ViewHolder last = grid.findViewHolderForAdapterPosition(COLUMNS - 1);
-        if (row == null || settings == null || settings.getWidth() == 0 || last == null) return;
+        if (last == null) return;
         View card = last.itemView.findViewById(R.id.card);
         if (card == null || card.getWidth() == 0) return;
         // Layout positions, not drawn ones: a focused card is scaled up, and the row's own shift
         // must not be counted twice.
-        Rect c = new Rect(0, 0, card.getWidth(), card.getHeight());
-        root.offsetDescendantRectToMyCoords(card, c);
-        Rect s = new Rect(0, 0, settings.getWidth(), settings.getHeight());
-        root.offsetDescendantRectToMyCoords(settings, s);
-        float shift = c.right - s.right;
-        if (Math.abs(row.getTranslationX() - shift) >= 1f) row.setTranslationX(shift);
+        alignCard.set(0, 0, card.getWidth(), card.getHeight());
+        root.offsetDescendantRectToMyCoords(card, alignCard);
+        alignButton.set(0, 0, topSettings.getWidth(), topSettings.getHeight());
+        root.offsetDescendantRectToMyCoords(topSettings, alignButton);
+        float shift = alignCard.right - alignButton.right;
+        if (Math.abs(topRow.getTranslationX() - shift) >= 1f) topRow.setTranslationX(shift);
+    }
+
+    /**
+     * One white shape for the top bar that glides between the pills, changing from pill to circle
+     * and back on the way. It is put behind the pills, whose glass steps aside while they are focused.
+     */
+    private void setUpTopHighlight() {
+        topHighlight = new PillHighlight(this);
+        View bar = findViewById(R.id.topButtons);
+        View child = bar;
+        while (child.getParent() != root) child = (View) child.getParent();
+        root.addView(topHighlight, root.indexOfChild(child),
+                new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, (int) (42 * density)));
+        highlightLeft = new SpringAnimation(topHighlight, PillHighlight.LEFT);
+        highlightRight = new SpringAnimation(topHighlight, PillHighlight.RIGHT);
+        for (SpringAnimation s : new SpringAnimation[]{highlightLeft, highlightRight}) {
+            // The same spring as the tile selection, so the bar and the grid move alike.
+            if (reducedMotion) {
+                s.setSpring(new SpringForce().setStiffness(1400f).setDampingRatio(0.95f));
+                s.setMinimumVisibleChange(1.5f);
+            } else {
+                s.setSpring(new SpringForce().setStiffness(900f).setDampingRatio(1.0f));
+            }
+        }
+    }
+
+    private boolean isTopPill(View v) {
+        int id = v.getId();
+        return id == R.id.btnInputs || id == R.id.btnWifi || id == R.id.btnSettings;
+    }
+
+    private void moveTopHighlight(View pill) {
+        pill.getLocationInWindow(pillAt);
+        root.getLocationInWindow(rootAt);
+        float l = pillAt[0] - rootAt[0];
+        float r = l + pill.getWidth();
+        topHighlight.setTranslationY(pillAt[1] - rootAt[1]);
+        if (!topHighlightShown) {
+            // Arriving from the grid: appear on the pill, then glide from there on.
+            highlightLeft.cancel();
+            highlightRight.cancel();
+            topHighlight.setEdges(l, r);
+            fadeTopHighlight(1f, reducedMotion ? 100 : 180);
+            topHighlightShown = true;
+        } else {
+            highlightLeft.animateToFinalPosition(l);
+            highlightRight.animateToFinalPosition(r);
+        }
+    }
+
+    private void hideTopHighlight() {
+        if (!topHighlightShown) return;
+        topHighlightShown = false;
+        fadeTopHighlight(0f, reducedMotion ? 100 : 160);
+    }
+
+    /**
+     * Fades the shape by its own opacity rather than the view's alpha: the pills paint their part of
+     * it too, and they have to fade with it.
+     */
+    private void fadeTopHighlight(float to, long ms) {
+        if (highlightFade != null) highlightFade.cancel();
+        highlightFade = android.animation.ValueAnimator.ofFloat(highlightOpacity, to);
+        highlightFade.setDuration(ms);
+        highlightFade.addUpdateListener(a -> {
+            highlightOpacity = (float) a.getAnimatedValue();
+            topHighlight.setOpacity(highlightOpacity);
+        });
+        highlightFade.start();
     }
 
     /** The shelf's two lines. An empty description takes no room, so the title keeps its place. */
@@ -884,6 +1010,42 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         setAmbient(color, false);
     }
 
+    /** Tells the glass the glow's colour and strength, so what shows through matches around it. */
+    private void syncGlassGlow() {
+        Backdrop.setGlow(ambientShape(), glowFrom, ambientColor, glowMix, ambient.getAlpha());
+    }
+
+    /** Runs the glass through the same colour blend as the room's TransitionDrawable. */
+    private void blendGlassGlow(int from, long ms) {
+        if (glowBlend != null) glowBlend.cancel();
+        glowFrom = from;
+        glowMix = 0f;
+        glowBlend = android.animation.ValueAnimator.ofFloat(0f, 1f);
+        glowBlend.setDuration(ms);
+        glowBlend.addUpdateListener(a -> {
+            glowMix = (float) a.getAnimatedValue();
+            syncGlassGlow();
+        });
+        glowBlend.start();
+    }
+
+    /** The glow's shape in white, drawn on first use and kept: a tint gives it each app's colour. */
+    private Bitmap ambientShape() {
+        if (ambientShape != null) return ambientShape;
+        int w = 480;
+        int h = 270;
+        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setShader(new RadialGradient(
+                w * 0.32f, h * 0.42f, w * 0.62f,
+                new int[]{0x5CFFFFFF, 0x26FFFFFF, 0x00FFFFFF},
+                new float[]{0f, 0.45f, 1f},
+                Shader.TileMode.CLAMP));
+        new Canvas(bmp).drawRect(0, 0, w, h, paint);
+        ambientShape = bmp;
+        return bmp;
+    }
+
     /** With crossFade, the old glow fades into the new one (two small textures, one blend). */
     private void setAmbient(int color, boolean crossFade) {
         if (color == ambientColor && ambient.getBackground() != null) return;
@@ -892,29 +1054,30 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             android.graphics.drawable.TransitionDrawable t = (android.graphics.drawable.TransitionDrawable) old;
             old = t.getDrawable(t.getNumberOfLayers() - 1);   // a blend still running: start from where it was heading
         }
+        int previous = ambientColor;
         ambientColor = color;
-        int c = color & 0x00FFFFFF;
-        int w = 480;
-        int h = 270;
-        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bmp);
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        paint.setShader(new RadialGradient(
-                w * 0.32f, h * 0.42f, w * 0.62f,
-                new int[]{0x5C000000 | c, 0x26000000 | c, 0x00000000 | c},
-                new float[]{0f, 0.45f, 1f},
-                Shader.TileMode.CLAMP));
-        canvas.drawRect(0, 0, w, h, paint);
-        BitmapDrawable drawable = new BitmapDrawable(getResources(), bmp);
+        // Every app's glow is the same shape in a different colour, so the shape is drawn once and
+        // each app only tints it. Drawing a fresh bitmap per move cost a CPU fill, half a megabyte
+        // and a texture upload every time focus moved, which is what made moving around feel heavy
+        // once every tile, not only the dock, tinted the room.
+        BitmapDrawable drawable = new BitmapDrawable(getResources(), ambientShape());
         drawable.setGravity(Gravity.FILL);
+        drawable.setColorFilter(new android.graphics.PorterDuffColorFilter(
+                0xFF000000 | color, android.graphics.PorterDuff.Mode.SRC_IN));
         if (crossFade && old != null) {
             android.graphics.drawable.TransitionDrawable t = new android.graphics.drawable.TransitionDrawable(
                     new android.graphics.drawable.Drawable[]{old, drawable});
             t.setCrossFadeEnabled(true);
             ambient.setBackground(t);
             t.startTransition(450);
+            // The glass blends with the room, over the same 450 ms, instead of jumping ahead of it.
+            blendGlassGlow(previous, 450);
         } else {
             ambient.setBackground(drawable);
+            if (glowBlend != null) glowBlend.cancel();
+            glowFrom = color;
+            glowMix = 1f;
+            syncGlassGlow();
         }
     }
 
@@ -923,7 +1086,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         hideShelf();
         if (!ambientShown) return;
         ambientShown = false;
-        ambient.animate().alpha(0f).setDuration(reducedMotion ? 140 : 300).start();
+        ambient.animate().alpha(0f).setDuration(reducedMotion ? 140 : 300)
+                .setUpdateListener(a -> syncGlassGlow()).start();
     }
 
     private void hideShelf() {
@@ -940,7 +1104,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private void showAmbient(int color) {
         if (!ambientShown) {
             setAmbient(color);
-            ambient.animate().alpha(1f).setDuration(reducedMotion ? 160 : 600).start();
+            ambient.animate().alpha(1f).setDuration(reducedMotion ? 160 : 600)
+                    .setUpdateListener(a -> syncGlassGlow()).start();
             ambientShown = true;
         } else if (color != ambientColor) {
             setAmbient(color, !reducedMotion);

@@ -46,7 +46,12 @@ A full sweep of a /24 takes about ten seconds. `adb` is found via `$ADB`, then
 
 Save this as `~/Library/LaunchAgents/com.example.tv-cache-clean.plist`, with
 `REPO` replaced by the path to your checkout. `StartInterval` is in seconds —
-172800 is every 48 hours.
+1296000 is every 15 days.
+
+Clearing caches has a cost: every app re-downloads its pictures the first time it
+opens afterwards, so profile photos, thumbnails and artwork load slowly or blank
+for a moment. Every 15 days keeps the disk in check without making that a
+regular thing. Clearing every day or two would mean living with it constantly.
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -60,7 +65,7 @@ Save this as `~/Library/LaunchAgents/com.example.tv-cache-clean.plist`, with
 		<string>REPO/tools/cache-clean.sh</string>
 	</array>
 	<key>StartInterval</key>
-	<integer>172800</integer>
+	<integer>1296000</integer>
 	<key>RunAtLoad</key>
 	<false/>
 </dict>
