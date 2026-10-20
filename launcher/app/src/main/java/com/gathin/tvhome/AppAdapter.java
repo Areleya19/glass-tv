@@ -83,6 +83,10 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     }
 
     static final float FOCUS_SCALE = 1.07f;
+    /** Shared by every tile's zoom, so a focus move makes no new objects. */
+    private static final DecelerateInterpolator ZOOM_REDUCED = new DecelerateInterpolator();
+    private static final OvershootInterpolator ZOOM_IN = new OvershootInterpolator(1.6f);
+    private static final OvershootInterpolator ZOOM_OUT = new OvershootInterpolator(0f);
     /** Design size of a tile (dp); tiles shrink from here when the columns don't fit, see tileWidthPx. */
     static final float DESIGN_W_DP = 180f, DESIGN_H_DP = 101f;
 
@@ -138,6 +142,11 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
      */
     /** What the tiles were last built from; the same list next time means there is nothing to redo. */
     private String builtFrom;
+    /**
+     * The app tiles of the last build, by component and install path: a rebuild (one app updated,
+     * installed or removed) loads only what changed, and the rest keep their artwork and sampled glow.
+     */
+    private Map<String, Entry> builtApps = new HashMap<>();
 
     /**
      * Rebuilds the tiles, unless the launchable apps, their installed versions and the cards are
@@ -170,6 +179,7 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         Map<String, Cards.Card> cardByPkg = new HashMap<>();
         for (Cards.Card c : cards) cardByPkg.put(c.pkg, c);
         List<Entry> fresh = new ArrayList<>();
+        Map<String, Entry> apps = new HashMap<>();
         for (ResolveInfo ri : found) {
             if (ri.activityInfo == null) continue;
             String pkg = ri.activityInfo.packageName;
@@ -177,16 +187,27 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
             ComponentName component = new ComponentName(pkg, ri.activityInfo.name);
             Cards.Card card = cardByPkg.get(pkg);
             if (card != null && !card.component.equals(component)) continue;   // the card stands in for this tile
+            String key = component.flattenToShortString() + '@' + ri.activityInfo.applicationInfo.sourceDir;
+            Entry built = card == null ? builtApps.get(key) : null;
+            if (built != null) {
+                fresh.add(built);
+                apps.put(key, built);
+                continue;
+            }
             Drawable banner = loadBanner(pm, ri);
-            Drawable icon = ri.loadIcon(pm);
+            // The icon only shows on a tile without a banner.
+            Drawable icon = banner == null ? ri.loadIcon(pm) : null;
             if (card != null) {
                 fresh.add(new Entry(Entry.CARD, card.label, component, banner, icon, card.caption, card.accent));
             } else {
                 // Same cleaner as the card prompt: an app label with a bidi override or line separator must not
                 // redraw the tile name as something else (#117).
-                fresh.add(new Entry(Cards.cleanLabel(String.valueOf(ri.loadLabel(pm)), pkg), component, banner, icon));
+                Entry entry = new Entry(Cards.cleanLabel(String.valueOf(ri.loadLabel(pm)), pkg), component, banner, icon);
+                fresh.add(entry);
+                apps.put(key, entry);
             }
         }
+        builtApps = apps;
         Collections.sort(fresh, (a, b) -> {
             int fa = favourites.indexOf(a.pkg), fb = favourites.indexOf(b.pkg);
             if (fa >= 0 || fb >= 0) {
@@ -426,14 +447,14 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
                     // No overshoot: the extra frames redraw the banner and the dock band on a weak GPU.
                     view.animate().scaleX(s).scaleY(s)
                             .setDuration(focused ? 120 : 80)
-                            .setInterpolator(new DecelerateInterpolator())
+                            .setInterpolator(ZOOM_REDUCED)
                             .withLayer()
                             .start();
                     name.animate().alpha(focused ? 1f : 0f).setDuration(100).start();
                 } else {
                     view.animate().scaleX(s).scaleY(s)
                             .setDuration(focused ? 260 : 180)
-                            .setInterpolator(new OvershootInterpolator(focused ? 1.6f : 0f))
+                            .setInterpolator(focused ? ZOOM_IN : ZOOM_OUT)
                             .withLayer()
                             .start();
                     name.animate().alpha(focused ? 1f : 0f)

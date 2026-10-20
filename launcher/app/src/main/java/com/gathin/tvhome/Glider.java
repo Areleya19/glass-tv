@@ -5,6 +5,7 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.RectF;
 import android.view.View;
 
 import androidx.dynamicanimation.animation.FloatPropertyCompat;
@@ -78,6 +79,12 @@ final class Glider extends View {
     private float shadowMix;
     private ValueAnimator shadowFade;
     private final List<View> companions = new ArrayList<>();
+    /** Per companion, the part of it the shape matters to (in its own coordinates), or null for all of it. */
+    private final List<RectF> companionAreas = new ArrayList<>();
+    /** Where the shape was last drawn and where it is now, shadow included, in this view's coordinates. */
+    private final RectF drawn = new RectF(), dirty = new RectF(), area = new RectF();
+    private final int[] gliderAt = new int[2], companionAt = new int[2];
+    private final float[] target = new float[5];
     private final boolean reducedMotion;
     /** How far a scrolling list has carried the shape since its target was set. */
     private float yShift;
@@ -120,7 +127,7 @@ final class Glider extends View {
      * from there: the Inputs menu's selection handing over to the top menu as the menu closes.
      */
     void appearAt(float l, float t, float r, float b, float radius) {
-        float[] to = {l, t - yShift, r, b - yShift, radius};
+        float[] to = aim(l, t, r, b, radius);
         for (int i = 0; i < springs.length; i++) {
             springs[i].cancel();
             edges[i] = to[i];
@@ -148,7 +155,26 @@ final class Glider extends View {
 
     /** Something that paints part of the shape itself, or fades for it, and so redraws as it moves. */
     void addCompanion(View v) {
+        addCompanion(v, null);
+    }
+
+    /**
+     * As {@link #addCompanion(View)}, for a view where only {@code area} (in its own coordinates, kept
+     * up to date by its owner) shows the shape: it redraws only when the shape is, or was, over that area.
+     */
+    void addCompanion(View v, RectF area) {
         companions.add(v);
+        companionAreas.add(area);
+    }
+
+    /** The target edges, in scroll-free space, in one reused array. */
+    private float[] aim(float l, float t, float r, float b, float radius) {
+        target[LEFT] = l;
+        target[TOP] = t - yShift;
+        target[RIGHT] = r;
+        target[BOTTOM] = b - yShift;
+        target[RADIUS] = radius;
+        return target;
     }
 
     /**
@@ -156,7 +182,7 @@ final class Glider extends View {
      * corner radius: a glide when it is showing, an appearance in place when it is not.
      */
     void moveTo(float l, float t, float r, float b, float radius) {
-        float[] to = {l, t - yShift, r, b - yShift, radius};
+        float[] to = aim(l, t, r, b, radius);
         if (!shown) {
             for (int i = 0; i < springs.length; i++) {
                 springs[i].cancel();
@@ -261,6 +287,15 @@ final class Glider extends View {
         int w = Math.round(shape.width()), h = Math.round(shape.height());
         if (w <= 0 || h <= 0) return;
         int pad = (int) Math.ceil(shadowBlur * 2);
+        if (shadow != null && (w != shadowW || h != shadowH) && moving()) {
+            // Changing size mid-glide: stretch the shadow it has rather than blur a new one every
+            // frame; the right one is made once the shape comes to rest.
+            shadowPaint.setColor(0xFF000000);
+            shadowPaint.setAlpha(Math.round(0x9A * opacity * shadowMix));
+            area.set(shape.left - pad, shape.top - pad + shadowDrop, shape.right + pad, shape.bottom + pad + shadowDrop);
+            canvas.drawBitmap(shadow, null, area, shadowPaint);
+            return;
+        }
         if (shadow == null || w != shadowW || h != shadowH) {
             shadow = Bitmap.createBitmap(w + 2 * pad, h + 2 * pad, Bitmap.Config.ALPHA_8);
             Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -286,9 +321,39 @@ final class Glider extends View {
         fade.start();
     }
 
+    private boolean moving() {
+        for (SpringAnimation sp : springs) if (sp.isRunning()) return true;
+        return false;
+    }
+
+    /**
+     * Redraws the shape, and each companion it is over or has just left: a glide among the lower
+     * rows of apps leaves the tray and the top-bar pills alone.
+     */
     private void changed() {
         invalidate();
-        for (int i = 0; i < companions.size(); i++) companions.get(i).invalidate();
+        if (companions.isEmpty()) return;
+        dirty.set(drawn);
+        if (isShowing()) {
+            float reach = 2f * shadowBlur + shadowDrop + 2f;
+            drawn.set(edges[LEFT] - reach, edges[TOP] + yShift - reach,
+                    edges[RIGHT] + reach, edges[BOTTOM] + yShift + reach);
+            dirty.union(drawn);
+        } else {
+            drawn.setEmpty();
+        }
+        if (dirty.isEmpty()) return;
+        getLocationInWindow(gliderAt);
+        for (int i = 0; i < companions.size(); i++) {
+            View v = companions.get(i);
+            RectF only = companionAreas.get(i);
+            v.getLocationInWindow(companionAt);
+            float dx = companionAt[0] - gliderAt[0], dy = companionAt[1] - gliderAt[1];
+            if (only == null || only.isEmpty()) area.set(0, 0, v.getWidth(), v.getHeight());
+            else area.set(only);
+            area.offset(dx, dy);
+            if (RectF.intersects(area, dirty)) v.invalidate();
+        }
     }
 
     /**

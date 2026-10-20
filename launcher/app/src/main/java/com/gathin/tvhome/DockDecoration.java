@@ -24,6 +24,8 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
     private final Backdrop.Fill blur = new Backdrop.Fill();
 
     private final RectF rect = new RectF();
+    /** The tray as last drawn, in the grid's coordinates: where the focus shape shows on it. */
+    final RectF area = new RectF();
 
     DockDecoration(int dockSize, float density) {
         this.dockSize = dockSize;
@@ -71,6 +73,7 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
         if (!any) return;
         float pad = 14 * density;
         rect.inset(-pad, -pad);
+        area.set(rect);
         float radius = 26 * density;
         blur.draw(c, parent, rect, radius, 1f);
         c.drawRoundRect(rect, radius, radius, band);

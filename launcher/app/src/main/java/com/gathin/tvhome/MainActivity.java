@@ -313,7 +313,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 ((DockDecoration) grid.getItemDecorationAt(i)).setGlider(glider);
             }
         }
-        glider.addCompanion(grid);
+        // The grid only shows the shape on the tray.
+        glider.addCompanion(grid, tray.area);
         for (int id : new int[]{R.id.btnInputs, R.id.btnWifi, R.id.btnSettings}) {
             View pill = findViewById(id);
             pill.setBackground(new GlassDrawable(pill, 21 * density, density, glider));
@@ -333,16 +334,21 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // tvOS layout: push the dock row towards the bottom of the screen, leaving room for
         // rows_below_dock grid rows under it; the rest of the grid stays below until you press Down.
         rowsBelowDockSetting = cfg.rowsBelowDock;
-        grid.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> parkDock());
+        grid.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            parkDock();
+            updateTopFade();
+        });
 
-        // Rows feather out under the top bar instead of being cut off. Always on, so it is there the moment
-        // a row reaches the bar; at rest nothing sits in the band, and the band's layer is small.
-        ((FadeTopFrame) findViewById(R.id.gridWrap)).setFadeStrength(1f);
+        // Rows feather out under the top bar instead of being cut off. The fade needs an offscreen
+        // layer and draws the grid twice, on every frame of every animation, so it is on only while a
+        // row is actually in the band: it switches on in the same frame a row scrolls into it.
+        gridWrap = findViewById(R.id.gridWrap);
 
         // Keep the glass glued to its tile while the grid scrolls.
         grid.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
             public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
+                updateTopFade();
                 if (!glassShown) return;
                 glassTargetY -= dy;
                 glassScrollShift -= dy;
@@ -540,6 +546,13 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             wallView.setImageBitmap(bmp);
             if (blur != null) Backdrop.present(blur, 0);
             else blurBackdrop(bmp);
+        }
+        // An opaque picture covers the whole screen, so the black window and the plain background
+        // under it are never seen. Painting them anyway cost two full-screen passes on every frame,
+        // and this TV's graphics chip, not the app, is what holds each frame back.
+        if (!bmp.hasAlpha()) {
+            root.setBackground(null);
+            getWindow().setBackgroundDrawable(null);
         }
     }
 
@@ -775,12 +788,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     // ---- glass highlight -------------------------------------------------------------------------
 
+    /** Reused by every focus move. */
+    private final Rect tileRect = new Rect(), showRect = new Rect();
+
     @Override
     public void onTileFocused(int position, View card) {
         lastFocused = position;
         lastFocusedKey = adapter.keyAt(position);
         // Tile rect in root coordinates, using layout positions (ignores the scale animation).
-        Rect r = new Rect(0, 0, card.getWidth(), card.getHeight());
+        Rect r = tileRect;
+        r.set(0, 0, card.getWidth(), card.getHeight());
         root.offsetDescendantRectToMyCoords(card, r);
         float pad = 6f * density;        // matches GlassView's glow inset
         float w = card.getWidth() * AppAdapter.FOCUS_SCALE + 2 * pad;
@@ -834,8 +851,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             hideShelf();
             showAmbient(adapter.ambientColorAt(position));
             // Scroll just enough so the whole glass (not only the tile) is visible.
-            Rect want = new Rect(0, -(int) pad * 2, item.getWidth(), item.getHeight() + (int) pad);
-            grid.requestChildRectangleOnScreen(item, want, reducedMotion);
+            showRect.set(0, -(int) pad * 2, item.getWidth(), item.getHeight() + (int) pad);
+            grid.requestChildRectangleOnScreen(item, showRect, reducedMotion);
         }
     }
 
@@ -1024,6 +1041,20 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * under it; the rest of the grid stays below until you press Down. Sets the grid's top padding
      * for that, and says whether it was already right.
      */
+    private FadeTopFrame gridWrap;
+
+    /** Turns the top fade on while any row reaches into its band, with room for a focused tile's zoom. */
+    private void updateTopFade() {
+        if (gridWrap == null) return;
+        float band = 56 * density + 24 * density;
+        boolean inBand = false;
+        for (int i = 0; i < grid.getChildCount() && !inBand; i++) {
+            View child = grid.getChildAt(i);
+            inBand = grid.getTop() + child.getTop() + child.getTranslationY() < band;
+        }
+        gridWrap.setFadeStrength(inBand ? 1f : 0f);
+    }
+
     private boolean parkDock() {
         int h = grid.getHeight();
         if (h <= 0) return false;
@@ -1200,6 +1231,19 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         return true;
     }
 
+    /** The tile {@link #focusWhenSettled} focuses once the grid stops scrolling to it. */
+    private int pendingFocus;
+    private final RecyclerView.OnScrollListener focusWhenSettled = new RecyclerView.OnScrollListener() {
+        @Override
+        public void onScrollStateChanged(@NonNull RecyclerView rv, int newState) {
+            if (newState != RecyclerView.SCROLL_STATE_IDLE) return;
+            rv.removeOnScrollListener(this);
+            RecyclerView.ViewHolder h = rv.findViewHolderForAdapterPosition(pendingFocus);
+            View target = h != null ? h.itemView.findViewById(R.id.card) : rv.getChildAt(0);
+            if (target != null) target.requestFocus();
+        }
+    };
+
     private void focusTile(int position) {
         if (adapter.getItemCount() == 0) {
             (btnWifi.getVisibility() == View.VISIBLE ? btnWifi : findViewById(R.id.btnSettings)).requestFocus();
@@ -1214,17 +1258,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             else card.requestFocus();
             return;
         }
-        // Not laid out yet: scroll there, then focus once the scroll settles.
-        grid.addOnScrollListener(new RecyclerView.OnScrollListener() {
-            @Override
-            public void onScrollStateChanged(@NonNull RecyclerView rv, int newState) {
-                if (newState != RecyclerView.SCROLL_STATE_IDLE) return;
-                rv.removeOnScrollListener(this);
-                RecyclerView.ViewHolder h = rv.findViewHolderForAdapterPosition(pos);
-                View target = h != null ? h.itemView.findViewById(R.id.card) : rv.getChildAt(0);
-                if (target != null) target.requestFocus();
-            }
-        });
+        // Not laid out yet: scroll there, then focus once the scroll settles. One listener at most,
+        // aimed at the latest target, so asking again mid-scroll cannot pull focus back to an older one.
+        pendingFocus = pos;
+        grid.removeOnScrollListener(focusWhenSettled);
+        grid.addOnScrollListener(focusWhenSettled);
         grid.smoothScrollToPosition(pos);
     }
 
