@@ -83,8 +83,6 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     }
 
     static final float FOCUS_SCALE = 1.07f;
-    /** How far the selected tile lifts, in dp: the system draws its drop shadow from this height. */
-    static final float FOCUS_LIFT_DP = 16f;
     /** Design size of a tile (dp); tiles shrink from here when the columns don't fit, see tileWidthPx. */
     static final float DESIGN_W_DP = 180f, DESIGN_H_DP = 101f;
 
@@ -259,7 +257,6 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
         h.name.setAlpha(focused ? 1f : 0f);
         h.card.setScaleX(focused ? FOCUS_SCALE : 1f);
         h.card.setScaleY(focused ? FOCUS_SCALE : 1f);
-        h.card.setTranslationZ(focused ? FOCUS_LIFT_DP * h.card.getResources().getDisplayMetrics().density : 0f);
         if (e.banner != null) {
             h.banner.setImageDrawable(e.banner);
             h.banner.setVisibility(View.VISIBLE);
@@ -423,20 +420,18 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
 
             card.setOnFocusChangeListener((view, focused) -> {
                 float s = focused ? FOCUS_SCALE : 1.0f;
-                // The selected tile lifts as it zooms, and the system casts its drop shadow below it.
-                float z = focused ? FOCUS_LIFT_DP * density : 0f;
                 view.animate().cancel();
                 name.animate().cancel();
                 if (reducedMotion) {
                     // No overshoot: the extra frames redraw the banner and the dock band on a weak GPU.
-                    view.animate().scaleX(s).scaleY(s).translationZ(z)
+                    view.animate().scaleX(s).scaleY(s)
                             .setDuration(focused ? 120 : 80)
                             .setInterpolator(new DecelerateInterpolator())
                             .withLayer()
                             .start();
                     name.animate().alpha(focused ? 1f : 0f).setDuration(100).start();
                 } else {
-                    view.animate().scaleX(s).scaleY(s).translationZ(z)
+                    view.animate().scaleX(s).scaleY(s)
                             .setDuration(focused ? 260 : 180)
                             .setInterpolator(new OvershootInterpolator(focused ? 1.6f : 0f))
                             .withLayer()

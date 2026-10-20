@@ -2,6 +2,7 @@ package com.gathin.tvhome;
 
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.view.View;
@@ -64,6 +65,18 @@ final class Glider extends View {
     private final GlassRim rim;
     private final android.graphics.RectF shape = new android.graphics.RectF();
     private int style = DARK;
+    /**
+     * The selected app's drop shadow, drawn by the glass glider behind it: soft and even all round,
+     * where the system's shadow fell mostly below the tile and was trimmed at its sides. Drawn once
+     * per tile size into a bitmap, since a blur cannot be drawn live on this TV's GPU.
+     */
+    private Bitmap shadow;
+    private int shadowW, shadowH;
+    private final Paint shadowPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
+    private final float shadowBlur, shadowDrop;
+    /** How far the shadow is shown: it comes in as the glider turns to glass, and goes with the dark. */
+    private float shadowMix;
+    private ValueAnimator shadowFade;
     private final List<View> companions = new ArrayList<>();
     private final boolean reducedMotion;
     /** How far a scrolling list has carried the shape since its target was set. */
@@ -80,6 +93,8 @@ final class Glider extends View {
         float density = context.getResources().getDisplayMetrics().density;
         veil.setColor(0x14FFFFFF);
         rim = new GlassRim(1.5f * density, 0xD9FFFFFF, 0x1AFFFFFF);
+        shadowBlur = 22f * density;
+        shadowDrop = 8f * density;
         Backdrop.watch(this);
         setFocusable(false);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -139,10 +154,22 @@ final class Glider extends View {
         for (int i = 0; i < springs.length; i++) springs[i].animateToFinalPosition(to[i]);
     }
 
-    /** Switches look at once; there is no blend between the two. */
+    /** Switches look at once; there is no blend between the two. The shadow eases in with the glass. */
     void setStyle(int style) {
         if (this.style == style) return;
         this.style = style;
+        if (shadowFade != null) shadowFade.cancel();
+        if (style == GLASS) {
+            shadowFade = ValueAnimator.ofFloat(shadowMix, 1f);
+            shadowFade.setDuration(reducedMotion ? 100 : 200);
+            shadowFade.addUpdateListener(a -> {
+                shadowMix = (float) a.getAnimatedValue();
+                changed();
+            });
+            shadowFade.start();
+        } else {
+            shadowMix = 0f;
+        }
         changed();
     }
 
@@ -200,7 +227,9 @@ final class Glider extends View {
             canvas.drawRoundRect(shape, r, r, paint);
             return;
         }
-        // Glass: what is behind it, softened, an even veil, and the shining edge.
+        // Glass: the selected app's shadow, what is behind it softened, an even veil, and the
+        // shining edge.
+        drawShadow(canvas, r);
         glass.draw(canvas, canvasOwner, shape, r, opacity);
         veil.setAlpha(Math.round(0x14 * opacity));
         canvas.drawRoundRect(shape, r, r, veil);
@@ -209,6 +238,25 @@ final class Glider extends View {
         rim.fit(shape);
         rim.paint.setAlpha(Math.round(255 * opacity));
         canvas.drawRoundRect(shape, r - half, r - half, rim.paint);
+    }
+
+    private void drawShadow(Canvas canvas, float radius) {
+        if (shadowMix <= 0f) return;
+        int w = Math.round(shape.width()), h = Math.round(shape.height());
+        if (w <= 0 || h <= 0) return;
+        int pad = (int) Math.ceil(shadowBlur * 2);
+        if (shadow == null || w != shadowW || h != shadowH) {
+            shadow = Bitmap.createBitmap(w + 2 * pad, h + 2 * pad, Bitmap.Config.ALPHA_8);
+            Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+            p.setColor(0xFF000000);
+            p.setMaskFilter(new android.graphics.BlurMaskFilter(shadowBlur, android.graphics.BlurMaskFilter.Blur.NORMAL));
+            new Canvas(shadow).drawRoundRect(pad, pad, pad + w, pad + h, radius, radius, p);
+            shadowW = w;
+            shadowH = h;
+        }
+        shadowPaint.setColor(0xFF000000);
+        shadowPaint.setAlpha(Math.round(0x9A * opacity * shadowMix));
+        canvas.drawBitmap(shadow, shape.left - pad, shape.top - pad + shadowDrop, shadowPaint);
     }
 
     private void fadeTo(float to, long ms) {
