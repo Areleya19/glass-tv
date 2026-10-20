@@ -10,8 +10,8 @@ new set of places every week.
 
 <p>
   <img src="docs/screenshots/promo-1-home.jpg" width="32%" alt="Your TV, fast and ad-free again: the TV behind on the left, the app grid behind on the right, Home over Mount Sneffels in front">
-  <img src="docs/screenshots/promo-2-clock.jpg" width="32%" alt="Ads off, time on: the clock screensaver">
-  <img src="docs/screenshots/promo-3-features.jpg" width="32%" alt="Looks like Apple, runs on Android: glass, Inputs, a place a week, your own app order, no ads">
+  <img src="docs/screenshots/promo-2-features.jpg" width="32%" alt="Looks like Apple, runs on Android: glass, Inputs, a place a week, your own app order, no ads">
+  <img src="docs/screenshots/promo-3-clock.jpg" width="32%" alt="Ads off, time on: the clock screensaver">
 </p>
 
 ## What Clean TV adds
