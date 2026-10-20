@@ -205,8 +205,14 @@
 
   // ---- the selection ----------------------------------------------------------------------------
 
-  function placeGlider(x, y, w, h, radius, style) {
+  var landTimer = 0;
+  /** Moves the selection. {@code landStyle}: the look it takes once it has arrived, if not the same. */
+  function placeGlider(x, y, w, h, radius, style, landStyle) {
+    clearTimeout(landTimer);
     glider.className = style;
+    if (landStyle && landStyle !== style) {
+      landTimer = setTimeout(function () { glider.className = landStyle; }, 320);
+    }
     glider.style.width = w + 'px';
     glider.style.height = h + 'px';
     glider.style.borderRadius = radius + 'px';
@@ -244,7 +250,9 @@
     // Behind the zoomed tile, worked out from the layout so it lands where the rows are going.
     var w = TILE_W * FOCUS_SCALE, h = TILE_H * FOCUS_SCALE;
     var cx = LEFT + focus.col * (TILE_W + GAP) + TILE_W / 2, cy = rowTop(focus.row) + TILE_H / 2;
-    placeGlider(cx - w / 2, cy - h / 2, w, h, 26 * FOCUS_SCALE, 'glass-style');
+    // Down from the top bar it travels dark and turns to glass once it lands, unseen behind the app.
+    var fromTop = glider.className === 'dark-style';
+    placeGlider(cx - w / 2, cy - h / 2, w, h, 26 * FOCUS_SCALE, fromTop ? 'dark-style' : 'glass-style', 'glass-style');
     // The place shelf belongs to the dock; the room takes the app's colour.
     hero.style.opacity = focus.row === 0 ? 1 : 0;
     glow.style.background = 'radial-gradient(70% 60% at 50% 85%, ' + hexA(t.app.color, 0.45) + ', transparent 70%)';

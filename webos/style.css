@@ -77,7 +77,8 @@ header { position: absolute; left: 112px; right: 144px; top: 98px; display: flex
 /* The selection: a pane of glass behind a tile, dark behind a top-bar button. */
 #glider { position: absolute; left: 0; top: 0; width: 10px; height: 10px; border-radius: 28px; z-index: 1; opacity: 0; pointer-events: none;
   transition: transform .3s cubic-bezier(.2, .8, .2, 1), width .3s cubic-bezier(.2, .8, .2, 1),
-              height .3s cubic-bezier(.2, .8, .2, 1), border-radius .3s, background .3s, opacity .2s; }
+              height .3s cubic-bezier(.2, .8, .2, 1), border-radius .3s, opacity .2s; }
+/* Its look changes at once, never blends: up to the top bar it is simply the dark fill. */
 #glider.glass-style { background: rgba(255, 255, 255, .16);
   box-shadow: 0 30px 70px rgba(0, 0, 0, .45); backdrop-filter: blur(28px) saturate(1.5); }
 #glider.dark-style { background: rgba(10, 10, 16, .62); border: 0; box-shadow: 0 12px 28px rgba(0, 0, 0, .35); }
