@@ -68,7 +68,7 @@ screenshots pulled from the TV. With this repo as context it takes about fifteen
 - **The rest of your apps in a grid** that slides up when you press Down.
 - **One floating glass highlight** that springs from tile to tile. The focused tile lifts and shows its name.
 - **Three frosted buttons**: Inputs (HDMI ports, AV, Live TV), Wi-Fi or Ethernet with the network name, Settings.
-- **A greeting, a thin clock and the date** in [Outfit](https://fonts.google.com/specimen/Outfit), and a matching Clock screensaver.
+- **A greeting, a thin clock and the date** in [Outfit](https://fonts.google.com/specimen/Outfit), and a Clock screensaver: a grey analog dial with the time and date beneath.
 - **Themes** that change colours, wallpaper, dock and columns without a rebuild, and **module cards** that let other apps plug a tile in, only with your say-so.
 
 And a TV that stops working against you: no sponsored rows, no "Discover" nags, no analytics
@@ -78,7 +78,7 @@ phoning home, no apps you never asked for.
 |---|---|
 | ![The top shelf names the focused app over an ambient glow in its colour](../docs/focus-2-up-netflix.png) | ![The Inputs popup: HDMI ports with what is connected, AV and Live TV](../docs/inputs-menu.jpg) |
 | *Top shelf and ambient glow* | *Inputs: HDMI with connection state, AV, Live TV* |
-| ![The grid with the glass highlight on a tile and its name beneath](../docs/focus-1-fancode.png) | ![The Clock screensaver: a thin clock drifting over the glow](../docs/clock-screensaver.png) |
+| ![The grid with the glass highlight on a tile and its name beneath](../docs/focus-1-fancode.png) | ![The Clock screensaver: a grey analog clock with the time and date beneath](../docs/clock-screensaver.png) |
 | *The grid, one glass highlight, the tile's name* | *Clock screensaver, drifts so nothing burns in* |
 | ![The aurora theme: a wallpaper and tinted pills, pushed without a rebuild](../docs/theme-aurora.jpg) | ![Six columns and a six-app dock from a theme's config.json](../docs/theme-six-columns.jpg) |
 | *Aurora theme, pushed with `tools/theme.sh`* | *Six columns and a six-app dock, same launcher* |
@@ -214,7 +214,7 @@ the install script finds `~/Android/Sdk` and the `java` on your PATH.
 - **Language** follows the TV: English, German, Spanish, Catalan, French, Russian, Serbian (Latin), Polish, Arabic, Simplified Chinese, Thai, Turkish. Android 13+ can set it for the launcher alone: `tools/tv.py 'cmd locale set-app-locales com.gathin.tvhome --locales ca'`.
   Russian includes the module-card approval and management screens and the VPN-off badge.
 - **Module cards** let any TV app declare its own tile (label, caption, glow). The launcher asks you once per app, Keep hidden by default, and remembers the answer for that app's signing key and card name. Hold OK on Settings to change your mind. How to make one: [`docs/modules.md`](../docs/modules.md); the contract: [`docs/specs/card.md`](../docs/specs/card.md).
-- **Clock screensaver**: a drifting clock over the glow, so nothing burns in. Pick "Clock" in the TV's screensaver settings, or over ADB:
+- **Clock screensaver**: a grey analog clock, its second hand ticking in yellow-orange, with the time and date beneath. It drifts a little every minute so nothing burns in. Pick "Clock" in the TV's screensaver settings, or over ADB:
   `tools/tv.py 'settings put secure screensaver_components com.gathin.tvhome/.ClockDream; settings put secure screensaver_enabled 1'`
 - **Remote keys**: an optional accessibility service keeps the remote's Input button working on Google TV (`INPUT_KEY_SERVICE=1` at install), another fixes sticks whose Home key sends ALL_APPS and opens Settings from the remote's gear button, even one Android does not map (`HOME_KEY_SERVICE=1`, scancodes in `config.xml`).
 - **Navigation** is deliberate: Up and Down move one row, the top buttons never fall through to tiles and Down from them returns to the dock tile you came from, the last focused app is remembered, and installing or removing an app refreshes the tiles while Home is open.

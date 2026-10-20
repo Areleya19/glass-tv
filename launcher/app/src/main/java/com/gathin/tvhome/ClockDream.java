@@ -1,39 +1,43 @@
 package com.gathin.tvhome;
 
-import android.animation.ArgbEvaluator;
-import android.animation.ValueAnimator;
-import android.graphics.drawable.GradientDrawable;
+import android.graphics.Paint;
+import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Looper;
 import android.service.dreams.DreamService;
+import android.text.format.DateFormat;
+import android.util.TypedValue;
 import android.view.View;
+import android.view.ViewGroup;
+import android.widget.LinearLayout;
+import android.widget.TextClock;
+import android.widget.TextView;
 
+import java.util.Locale;
 import java.util.Random;
 
 /**
- * Screensaver: the launcher's thin clock and date on black, over a slow ambient glow.
- * The clock sits in the middle of the screen. Every minute it shifts a few pixels around the centre and
- * the glow changes colour, so nothing burns in while it still reads as centred.
- * No network, no images: cheap enough for a 1 GB TV.
+ * Screensaver: a grey analog clock (see {@link ClockFace}) with the time and a short date beneath.
+ * It sits in the middle of the screen and every minute shifts a few pixels around the centre, so
+ * nothing burns in while it still reads as centred. No network, no images: cheap enough for a 1 GB TV.
+ *
+ * <p>Everything is sized from the screen's height, in the units the design was drawn in: a screen
+ * 380 units tall.
  */
 public class ClockDream extends DreamService {
 
     private static final long MOVE_MS = 60_000L;
-    /** Deep, low-brightness glow colours; the glow is drawn at partial alpha on black. */
-    private static final int[] PALETTE = {0xFF2B5CFF, 0xFF00A39A, 0xFF8A3FFC, 0xFFE0661B, 0xFFD6336C};
+    private static final float SCREEN_UNITS = 380f;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Random random = new Random();
     private View content;
-    private GradientDrawable glow;
-    private int colorIndex;
-    private int glowColor;
+    private ClockFace face;
 
     private final Runnable tick = new Runnable() {
         @Override
         public void run() {
             moveClock();
-            shiftGlow();
             handler.postDelayed(this, MOVE_MS);
         }
     };
@@ -47,14 +51,53 @@ public class ClockDream extends DreamService {
         setContentView(R.layout.dream_clock);
 
         content = findViewById(R.id.dreamContent);
-        View ambient = findViewById(R.id.dreamAmbient);
-        glow = new GradientDrawable();
-        glow.setGradientType(GradientDrawable.RADIAL_GRADIENT);
-        ambient.setBackground(glow);
-        ambient.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) ->
-                glow.setGradientRadius((r - l) * 0.55f));
-        colorIndex = random.nextInt(PALETTE.length);
-        setGlow(PALETTE[colorIndex]);
+        face = new ClockFace(this);
+        ((ViewGroup) content).addView(face, 0, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        TextClock date = findViewById(R.id.dreamDate);
+        String pattern = DateFormat.getBestDateTimePattern(Locale.getDefault(), "MMMdyyyy");
+        date.setFormat12Hour(pattern);
+        date.setFormat24Hour(pattern);
+        View screen = (View) content.getParent();
+        screen.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            if (b - t != ob - ot) size(b - t);
+        });
+        // Re-centre once the clock has its size for this screen.
+        content.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
+            if (r - l != or - ol || b - t != ob - ot) placeClock();
+        });
+    }
+
+    /** Lays the clock out for a screen {@code height} pixels tall. */
+    private void size(int height) {
+        float u = height / SCREEN_UNITS;
+        face.setRimRadius(98.4f * u);
+        TextView time = findViewById(R.id.dreamTime);
+        TextView amPm = findViewById(R.id.dreamAmPm);
+        TextView date = findViewById(R.id.dreamDate);
+        time.setTextSize(TypedValue.COMPLEX_UNIT_PX, 44f * u);
+        amPm.setTextSize(TypedValue.COMPLEX_UNIT_PX, 14f * u);
+        date.setTextSize(TypedValue.COMPLEX_UNIT_PX, 14f * u);
+
+        // The tops of the digits sit 34 units under the rim; the dial's view holds 16 units of shadow.
+        LinearLayout.LayoutParams row = (LinearLayout.LayoutParams) findViewById(R.id.dreamTimeRow).getLayoutParams();
+        row.topMargin = Math.round(18f * u - capInset(time, "0"));
+        // AM/PM's capitals start where the digits do.
+        LinearLayout.LayoutParams ampm = (LinearLayout.LayoutParams) amPm.getLayoutParams();
+        ampm.leftMargin = Math.round(5f * u);
+        amPm.setTranslationY(capInset(time, "0") - capInset(amPm, "PM"));
+        // The date's capitals start 22 units under the digits' baseline.
+        LinearLayout.LayoutParams dateRow = (LinearLayout.LayoutParams) date.getLayoutParams();
+        dateRow.topMargin = Math.round(22f * u - time.getPaint().getFontMetrics().descent - capInset(date, "O"));
+        content.requestLayout();
+    }
+
+    /** How far below the top of {@code view} the tops of {@code letters} are drawn. */
+    private static float capInset(TextView view, String letters) {
+        Paint paint = view.getPaint();
+        Rect bounds = new Rect();
+        paint.getTextBounds(letters, 0, letters.length(), bounds);
+        return bounds.top - paint.getFontMetrics().ascent;
     }
 
     @Override
@@ -65,12 +108,14 @@ public class ClockDream extends DreamService {
             placeClock();
             content.animate().alpha(1f).setDuration(1200).start();
         });
+        face.start();
         handler.postDelayed(tick, MOVE_MS);
     }
 
     @Override
     public void onDreamingStopped() {
         handler.removeCallbacks(tick);
+        face.stop();
         super.onDreamingStopped();
     }
 
@@ -87,7 +132,7 @@ public class ClockDream extends DreamService {
         }).start();
     }
 
-    /** The middle of the screen, nudged up to 1.5 % either way, with the glow centred behind it. */
+    /** The middle of the screen, nudged up to 1.5 % either way. */
     private void placeClock() {
         View parent = (View) content.getParent();
         float nudgeX = parent.getWidth() * 0.015f * (2f * random.nextFloat() - 1f);
@@ -96,24 +141,5 @@ public class ClockDream extends DreamService {
         float y = (parent.getHeight() - content.getHeight()) / 2f + nudgeY;
         content.setX(x);
         content.setY(y);
-        if (parent.getWidth() > 0 && parent.getHeight() > 0) {
-            glow.setGradientCenter((x + content.getWidth() / 2f) / parent.getWidth(),
-                    (y + content.getHeight() / 2f) / parent.getHeight());
-        }
-    }
-
-    private void shiftGlow() {
-        int from = glowColor;
-        colorIndex = (colorIndex + 1) % PALETTE.length;
-        ValueAnimator anim = ValueAnimator.ofObject(new ArgbEvaluator(), from, PALETTE[colorIndex]);
-        anim.setDuration(8000);
-        anim.addUpdateListener(a -> setGlow((int) a.getAnimatedValue()));
-        anim.start();
-    }
-
-    private void setGlow(int color) {
-        glowColor = color;
-        int c = color & 0x00FFFFFF;
-        glow.setColors(new int[]{0x40000000 | c, 0x14000000 | c, 0x00000000 | c});
     }
 }
