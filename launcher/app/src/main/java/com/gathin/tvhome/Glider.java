@@ -14,9 +14,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The focus: one dark rounded shape that glides from whatever had focus to whatever has it now,
- * changing only its size and corners on the way. The same shape moves between the app tiles, up to
- * the top menu's pills and back, and between the rows of the Inputs list.
+ * The focus: one rounded shape that glides from whatever had focus to whatever has it now,
+ * changing only its size and corners on the way. Between apps it is a pane of glass; on the top
+ * menu, and travelling between the dock and the top menu, it is dark. It switches look at once,
+ * never blending, and the Inputs list has a dark one of its own.
  *
  * <p>It sits behind what it marks, so it never draws over an app, a pill's label or a row's text:
  * around a tile it shows as a dark frame, and under a pill or a row as its fill. Glass that covers
@@ -27,6 +28,10 @@ final class Glider extends View {
 
     /** About 63% black: bright text reads on it, and every place that uses it matches. */
     static final int FOCUS_ALPHA = 0xA0;
+    /** The top menu's look: a dark fill. */
+    static final int DARK = 0;
+    /** Between apps: a pane of glass, the same as the pills and the tray. */
+    static final int GLASS = 1;
 
     private static final class Edge extends FloatPropertyCompat<Glider> {
         private final int which;
@@ -54,6 +59,11 @@ final class Glider extends View {
     private final float[] edges = new float[5];
     private final SpringAnimation[] springs = new SpringAnimation[5];
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Backdrop.Fill glass = new Backdrop.Fill();
+    private final Paint veil = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final GlassRim rim;
+    private final android.graphics.RectF shape = new android.graphics.RectF();
+    private int style = DARK;
     private final List<View> companions = new ArrayList<>();
     private final boolean reducedMotion;
     /** How far a scrolling list has carried the shape since its target was set. */
@@ -61,10 +71,16 @@ final class Glider extends View {
     private float opacity;
     private boolean shown;
     private ValueAnimator fade;
+    /** Run once the shape has come to rest after a glide (see {@link #onArrive}). */
+    private Runnable arrival;
 
     Glider(Context context, boolean reducedMotion) {
         super(context);
         this.reducedMotion = reducedMotion;
+        float density = context.getResources().getDisplayMetrics().density;
+        veil.setColor(0x14FFFFFF);
+        rim = new GlassRim(1.5f * density, 0xD9FFFFFF, 0x1AFFFFFF);
+        Backdrop.watch(this);
         setFocusable(false);
         setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
         String[] names = {"left", "top", "right", "bottom", "radius"};
@@ -78,7 +94,25 @@ final class Glider extends View {
             } else {
                 springs[i].setSpring(new SpringForce().setStiffness(900f).setDampingRatio(1.0f));
             }
+            springs[i].addEndListener((anim, canceled, value, velocity) -> {
+                if (!canceled) arriveIfResting();
+            });
         }
+    }
+
+    /** Runs {@code then} once the shape comes to rest from the glide now under way. */
+    void onArrive(Runnable then) {
+        arrival = then;
+        // Nothing may be moving at all (already in place): settle on the next frame.
+        post(this::arriveIfResting);
+    }
+
+    private void arriveIfResting() {
+        if (arrival == null) return;
+        for (SpringAnimation sp : springs) if (sp.isRunning()) return;
+        Runnable then = arrival;
+        arrival = null;
+        then.run();
     }
 
     /** Something that paints part of the shape itself, or fades for it, and so redraws as it moves. */
@@ -105,7 +139,15 @@ final class Glider extends View {
         for (int i = 0; i < springs.length; i++) springs[i].animateToFinalPosition(to[i]);
     }
 
+    /** Switches look at once; there is no blend between the two. */
+    void setStyle(int style) {
+        if (this.style == style) return;
+        this.style = style;
+        changed();
+    }
+
     void hide() {
+        arrival = null;
         if (!shown) return;
         shown = false;
         fadeTo(0f, reducedMotion ? 100 : 160);
@@ -113,6 +155,7 @@ final class Glider extends View {
 
     /** Gone at once, for when the screen is rebuilt underneath it. */
     void hideNow() {
+        arrival = null;
         shown = false;
         if (fade != null) fade.cancel();
         opacity = 0f;
@@ -141,14 +184,31 @@ final class Glider extends View {
         return Math.min(1f, (ox * oy) / (w * h)) * opacity;
     }
 
-    /** Draws the shape on {@code canvas}, whose origin sits at (dx, dy) from this view's own. */
-    void drawShape(Canvas canvas, float dx, float dy) {
+    /**
+     * Draws the shape on {@code canvas}, whose origin sits at (dx, dy) from this view's own.
+     * {@code canvasOwner} is the view the canvas belongs to, which the glass needs to line up the
+     * picture behind it.
+     */
+    void drawShape(Canvas canvas, float dx, float dy, View canvasOwner) {
         if (!isShowing()) return;
-        paint.setColor((int) (FOCUS_ALPHA * opacity) << 24);
         float t = edges[TOP] + yShift, b = edges[BOTTOM] + yShift;
         // Never rounder than the shape allows: a pill's ends stay round as it shrinks to a circle.
         float r = Math.min(edges[RADIUS], Math.min(b - t, edges[RIGHT] - edges[LEFT]) / 2f);
-        canvas.drawRoundRect(edges[LEFT] + dx, t + dy, edges[RIGHT] + dx, b + dy, r, r, paint);
+        shape.set(edges[LEFT] + dx, t + dy, edges[RIGHT] + dx, b + dy);
+        if (style == DARK) {
+            paint.setColor((int) (FOCUS_ALPHA * opacity) << 24);
+            canvas.drawRoundRect(shape, r, r, paint);
+            return;
+        }
+        // Glass: what is behind it, softened, an even veil, and the shining edge.
+        glass.draw(canvas, canvasOwner, shape, r, opacity);
+        veil.setAlpha(Math.round(0x14 * opacity));
+        canvas.drawRoundRect(shape, r, r, veil);
+        float half = rim.paint.getStrokeWidth() / 2f;
+        shape.inset(half, half);
+        rim.fit(shape);
+        rim.paint.setAlpha(Math.round(255 * opacity));
+        canvas.drawRoundRect(shape, r - half, r - half, rim.paint);
     }
 
     private void fadeTo(float to, long ms) {
@@ -183,6 +243,6 @@ final class Glider extends View {
 
     @Override
     protected void onDraw(Canvas canvas) {
-        drawShape(canvas, 0f, 0f);
+        drawShape(canvas, 0f, 0f, this);
     }
 }

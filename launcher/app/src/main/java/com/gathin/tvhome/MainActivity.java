@@ -89,6 +89,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private View ambient;
     /** The focus: one dark shape gliding between tiles and pills (see Glider). */
     private Glider glider;
+    /** Whether the glider is on the top menu, so a move down travels dark. */
+    private boolean gliderOnPill;
     private final int[] pillAt = new int[2], rootAt = new int[2];
     /** The top-right buttons and the two rectangles used to line them up with the dock. */
     private View topRow, topSettings;
@@ -781,10 +783,22 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
         glassTargetX = x;
         glassTargetY = y;
-        // Exactly the zoomed card, behind it: at rest the app hides it completely, so it adds no
-        // frame of its own and only shows while it travels between places.
+        // Exactly the zoomed card, behind it: at rest the app hides it completely, so it never lies
+        // over an app and only shows while it travels between places.
         float cardRadius = AppAdapter.cornerRadius(card.getWidth(), density) * AppAdapter.FOCUS_SCALE;
-        glider.moveTo(x + pad, y + pad, x + w - pad, y + h - pad, cardRadius);
+        if (gliderOnPill) {
+            // Down from the top menu it travels dark, and turns to glass once it lands, unseen behind
+            // the app.
+            glider.moveTo(x + pad, y + pad, x + w - pad, y + h - pad, cardRadius);
+            glider.onArrive(() -> {
+                if (!gliderOnPill) glider.setStyle(Glider.GLASS);
+            });
+        } else {
+            // From app to app it is a pane of glass gliding behind them.
+            glider.setStyle(Glider.GLASS);
+            glider.moveTo(x + pad, y + pad, x + w - pad, y + h - pad, cardRadius);
+        }
+        gliderOnPill = false;
         glassShown = true;
         View item = (View) card.getParent();
         if (position < COLUMNS) {
@@ -911,6 +925,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         float l = pillAt[0] - rootAt[0], t = pillAt[1] - rootAt[1];
         // The pills do not scroll with the grid, so the shape stops following the grid's scroll.
         glassShown = false;
+        // Up to the top menu it is dark at once, and travels that way.
+        gliderOnPill = true;
+        glider.setStyle(Glider.DARK);
         glider.moveTo(l, t, l + pill.getWidth(), t + pill.getHeight(), pill.getHeight() / 2f);
     }
 

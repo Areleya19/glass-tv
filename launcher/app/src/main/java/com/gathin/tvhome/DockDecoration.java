@@ -81,7 +81,7 @@ public class DockDecoration extends RecyclerView.ItemDecoration {
             glider.getLocationInWindow(gliderAt);
             c.save();
             c.clipRect(rect);
-            glider.drawShape(c, gliderAt[0] - at[0], gliderAt[1] - at[1]);
+            glider.drawShape(c, gliderAt[0] - at[0], gliderAt[1] - at[1], parent);
             c.restore();
         }
         // Drawn just inside the tray, as the pills draw theirs: a stroke centred on the boundary
