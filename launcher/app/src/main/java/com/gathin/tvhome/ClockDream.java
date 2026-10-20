@@ -71,7 +71,7 @@ public class ClockDream extends DreamService {
     /** Lays the clock out for a screen {@code height} pixels tall. */
     private void size(int height) {
         float u = height / SCREEN_UNITS;
-        face.setRimRadius(98.4f * u);
+        face.setRimRadius(83.6f * u);
         TextView time = findViewById(R.id.dreamTime);
         TextView amPm = findViewById(R.id.dreamAmPm);
         TextView date = findViewById(R.id.dreamDate);
@@ -79,9 +79,9 @@ public class ClockDream extends DreamService {
         amPm.setTextSize(TypedValue.COMPLEX_UNIT_PX, 14f * u);
         date.setTextSize(TypedValue.COMPLEX_UNIT_PX, 14f * u);
 
-        // The tops of the digits sit 34 units under the rim; the dial's view holds 16 units of shadow.
+        // The tops of the digits sit 34 units under the rim, below the room the dial keeps for its shadow.
         LinearLayout.LayoutParams row = (LinearLayout.LayoutParams) findViewById(R.id.dreamTimeRow).getLayoutParams();
-        row.topMargin = Math.round(18f * u - capInset(time, "0"));
+        row.topMargin = Math.round(34f * u - face.shadowRoom() - capInset(time, "0"));
         // AM/PM's capitals start where the digits do.
         LinearLayout.LayoutParams ampm = (LinearLayout.LayoutParams) amPm.getLayoutParams();
         ampm.leftMargin = Math.round(5f * u);

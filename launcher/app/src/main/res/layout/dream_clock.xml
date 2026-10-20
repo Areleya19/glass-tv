@@ -4,7 +4,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FF2B2C2F">
+    android:background="#FF252528">
 
     <LinearLayout
         android:id="@+id/dreamContent"
@@ -26,7 +26,7 @@
                 android:layout_height="wrap_content"
                 android:format12Hour="h:mm"
                 android:format24Hour="HH:mm"
-                android:textColor="#FFECECEE"
+                android:textColor="#FFD4D4D6"
                 android:fontFamily="@font/outfit"
                 android:fontVariationSettings="'wght' 500"
                 android:includeFontPadding="false" />
@@ -38,7 +38,7 @@
                 android:layout_height="wrap_content"
                 android:format12Hour="a"
                 android:format24Hour=""
-                android:textColor="#FFC9CACD"
+                android:textColor="#FFB5B6B8"
                 android:fontFamily="@font/outfit"
                 android:fontVariationSettings="'wght' 500"
                 android:includeFontPadding="false"
@@ -49,7 +49,7 @@
             android:id="@+id/dreamDate"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#FF9A9BA0"
+            android:textColor="#FF8B8C90"
             android:fontFamily="@font/outfit"
             android:fontVariationSettings="'wght' 400"
             android:includeFontPadding="false" />
