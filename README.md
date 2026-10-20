@@ -8,7 +8,11 @@ Clean TV keeps everything Clean Your TV does — debloat any Android TV over Wi-
 and swap the ad-filled home screen for a light Apple TV-style launcher — and adds a home screen that shows a
 new set of places every week.
 
-![Clean TV: your TV, fast and ad-free again](docs/screenshots/home-places.jpg)
+<p>
+  <img src="docs/screenshots/promo-1-home.jpg" width="32%" alt="Your TV, fast and ad-free again: Home with the glass dock and Inputs menu">
+  <img src="docs/screenshots/promo-2-clock.jpg" width="32%" alt="Ads off, time on: the clock screensaver">
+  <img src="docs/screenshots/promo-3-features.jpg" width="32%" alt="Looks like Apple, runs on Android: glass, Inputs, a place a week, your own app order, no ads">
+</p>
 
 ## What Clean TV adds
 
@@ -97,5 +101,6 @@ online.
   [LICENSE](LICENSE). Its debloat lists, tools and launcher are the foundation of this project.
 - The Outfit typeface is under the SIL Open Font License (`launcher/FONT-LICENSE-OFL.txt`).
 - The Inputs icon is from Google's Material Icons (Apache 2.0).
-- Pictures of places and their captions are Bing's daily images (Microsoft). They are fetched on your own TV
-  and are not part of this repository.
+- Pictures of places and their captions are Bing's daily images (Microsoft). The launcher fetches them on your
+  own TV; the promo pictures above show three of them.
+- Gotham, used in the promo pictures only, is a Hoefler&Co. typeface and is not part of this repository.
