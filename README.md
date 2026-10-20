@@ -54,6 +54,11 @@ launcher/build-and-install.sh                                 # build the launch
 tools/theme.sh themes/<your theme>                            # push your settings and wallpapers
 ```
 
+To stop the TV's storage filling with Play Store leftovers — which can corrupt
+an app's cache badly enough to leave it launching to a blank screen —
+[`tools/cache-clean.sh`](docs/cache-clean.md) finds the TVs on your network and
+clears their caches, leaving sign-ins and app data untouched.
+
 ## Turning on movie wallpapers
 
 1. Get a free API key at [themoviedb.org → Settings → API](https://www.themoviedb.org/settings/api).
