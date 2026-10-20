@@ -124,6 +124,19 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private PopupWindow openPopup;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
+    /** Rotating wallpaper (Config.wallpapers), the view that shows it and the bitmap on screen. */
+    private List<File> wallpapers = Collections.emptyList();
+    private long wallpaperIntervalMs;
+    /** Decodes the next picture off the main thread, so a switch never stutters the D-pad animations. */
+    private final java.util.concurrent.ExecutorService wallDecoder = java.util.concurrent.Executors.newSingleThreadExecutor();
+    private long wallShownAt;
+    private android.widget.ImageView wallView;
+    private android.graphics.Bitmap wallBitmap;
+    /** Settings kept for the movie refresh, which runs after onCreate. */
+    private Config config;
+    /** Recent-movie wallpapers are on (a TMDB key is set); their pictures are dimmed behind the tiles. */
+    private boolean movieMode;
+    private volatile boolean movieRefreshRunning;
     /** Refreshes the network pill when the connection changes: at boot Wi-Fi often connects after Home is shown. */
     private final ConnectivityManager.NetworkCallback networkCallback = new ConnectivityManager.NetworkCallback() {
         @Override
@@ -175,6 +188,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         public void run() {
             updateGreeting();
             updateWifiLabel();
+            refreshMoviesIfDue();
             handler.postDelayed(this, MINUTE_MS);
         }
     };
@@ -196,12 +210,19 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
         root = findViewById(R.id.root);
         root.setBackgroundColor(cfg.backgroundColor);
-        if (cfg.wallpaper != null) showWallpaper(cfg.wallpaper);
+        config = cfg;
+        wallpapers = cfg.wallpapers;
+        wallpaperIntervalMs = cfg.wallpaperIntervalMs;
+        movieMode = !cfg.tmdbApiKey.isEmpty();
+        if (movieMode && !MovieWallpapers.list(this).isEmpty()) wallpapers = MovieWallpapers.list(this);
+        if (!wallpapers.isEmpty()) showNextWallpaper(false);
+        else if (cfg.wallpaper != null) setWallpaper(decodeWallpaper(cfg.wallpaper), false);
         glass = findViewById(R.id.glass);
         ambient = findViewById(R.id.ambient);
         heroName = findViewById(R.id.heroName);
         greeting = findViewById(R.id.greeting);
         btnWifi = findViewById(R.id.btnWifi);
+        if (!cfg.showNetworkPill) btnWifi.setVisibility(View.GONE);
         shamsiDate = findViewById(R.id.shamsiDate);
         shamsi = cfg.shamsiDate;
         if (shamsi) {
@@ -242,6 +263,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
         });
 
+        // Rows feather out under the top bar instead of being cut off. Always on, so it is there the moment
+        // a row reaches the bar; at rest nothing sits in the band, and the band's layer is small.
+        ((FadeTopFrame) findViewById(R.id.gridWrap)).setFadeStrength(1f);
+
         // Keep the glass glued to its tile while the grid scrolls.
         grid.addOnScrollListener(new RecyclerView.OnScrollListener() {
             @Override
@@ -273,7 +298,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 s.setSpring(new SpringForce().setStiffness(1400f).setDampingRatio(0.95f));
                 s.setMinimumVisibleChange(1.5f);
             } else {
-                s.setSpring(new SpringForce().setStiffness(260f).setDampingRatio(0.58f));
+                // Critically damped: glides onto the tile and stops there, with no bounce back.
+                s.setSpring(new SpringForce().setStiffness(900f).setDampingRatio(1.0f));
             }
         }
 
@@ -303,9 +329,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 return true;
             }
             if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) {
-                // The left end is Inputs, or Wi-Fi on a box without inputs.
+                // The left end is Inputs, or Wi-Fi on a box without inputs, or Settings when both are gone.
                 return v.getId() == R.id.btnInputs
-                        || (v.getId() == R.id.btnWifi && btnInputs.getVisibility() != View.VISIBLE);
+                        || (v.getId() == R.id.btnWifi && btnInputs.getVisibility() != View.VISIBLE)
+                        || (v.getId() == R.id.btnSettings && btnInputs.getVisibility() != View.VISIBLE
+                            && btnWifi.getVisibility() != View.VISIBLE);
             }
             return keyCode == KeyEvent.KEYCODE_DPAD_RIGHT && v.getId() == R.id.btnSettings;
         };
@@ -340,7 +368,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * A theme's full-screen picture behind everything. Decoded once, downsampled to the screen so a 4K
      * JPEG costs a 1080p bitmap at most (about 8 MB), which is the price of a wallpaper on a 1 GB TV.
      */
-    private void showWallpaper(File file) {
+    private android.graphics.Bitmap decodeWallpaper(File file) {
         try {
             android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
             android.graphics.BitmapFactory.Options opts = new android.graphics.BitmapFactory.Options();
@@ -351,15 +379,137 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             opts.inJustDecodeBounds = false;
             opts.inSampleSize = sample;
             opts.inPreferredConfig = android.graphics.Bitmap.Config.RGB_565;   // no alpha needed, half the memory
-            android.graphics.Bitmap bmp = android.graphics.BitmapFactory.decodeFile(file.getPath(), opts);
-            if (bmp == null) return;
-            android.widget.ImageView wall = new android.widget.ImageView(this);
-            wall.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
-            wall.setImageBitmap(bmp);
-            root.addView(wall, 0, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+            return android.graphics.BitmapFactory.decodeFile(file.getPath(), opts);
         } catch (Exception | OutOfMemoryError e) {
             // A bad or huge picture must never take the home screen down; the plain colour stays.
+            return null;
         }
+    }
+
+    /**
+     * Movie backdrops often frame their characters to one side, leaving room for a title. Finds where the
+     * detail is (edge energy on a 64 x 36 thumbnail; faces and props are sharp, backgrounds soft), then
+     * crops a slightly zoomed 16:9 window around it so the subject sits nearer the middle of the screen.
+     */
+    private static android.graphics.Bitmap centreOnSubject(android.graphics.Bitmap src) {
+        if (src == null) return null;
+        try {
+            final int tw = 64, th = 36;
+            android.graphics.Bitmap thumb = android.graphics.Bitmap.createScaledBitmap(src, tw, th, true);
+            int[] px = new int[tw * th];
+            thumb.getPixels(px, 0, tw, 0, 0, tw, th);
+            thumb.recycle();
+            float[] lum = new float[px.length];
+            for (int i = 0; i < px.length; i++) {
+                int c = px[i];
+                lum[i] = 0.299f * ((c >> 16) & 0xFF) + 0.587f * ((c >> 8) & 0xFF) + 0.114f * (c & 0xFF);
+            }
+            double sum = 0, sx = 0, sy = 0;
+            for (int y = 1; y < th - 1; y++) {
+                for (int x = 1; x < tw - 1; x++) {
+                    float gx = lum[y * tw + x + 1] - lum[y * tw + x - 1];
+                    float gy = lum[(y + 1) * tw + x] - lum[(y - 1) * tw + x];
+                    double e = gx * gx + gy * gy;
+                    sum += e;
+                    sx += e * x;
+                    sy += e * y;
+                }
+            }
+            if (sum <= 0) return src;
+            float fx = (float) (sx / sum) / (tw - 1), fy = (float) (sy / sum) / (th - 1);
+            // 1/1.3 of the picture each way: enough room to move the subject in, little detail lost.
+            int cw = Math.round(src.getWidth() / 1.3f), ch = Math.round(src.getHeight() / 1.3f);
+            int x = Math.max(0, Math.min(src.getWidth() - cw, Math.round(fx * src.getWidth() - cw / 2f)));
+            int y = Math.max(0, Math.min(src.getHeight() - ch, Math.round(fy * src.getHeight() - ch / 2f)));
+            android.graphics.Bitmap out = android.graphics.Bitmap.createBitmap(src, x, y, cw, ch);
+            if (out != src) src.recycle();
+            return out;
+        } catch (Exception | OutOfMemoryError e) {
+            return src;
+        }
+    }
+
+    /** Puts a picture behind everything, cross-fading from the previous one when asked. */
+    private void setWallpaper(android.graphics.Bitmap bmp, boolean fade) {
+        if (bmp == null) return;
+        if (wallView == null) {
+            wallView = new android.widget.ImageView(this);
+            wallView.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+            // Movie stills are bright: dim them so the clock, names and tiles stay readable.
+            if (movieMode) wallView.setColorFilter(0xFF7A7A7A, android.graphics.PorterDuff.Mode.MULTIPLY);
+            root.addView(wallView, 0, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        }
+        android.graphics.Bitmap old = wallBitmap;
+        wallBitmap = bmp;
+        if (fade && old != null && !reducedMotion) {
+            android.graphics.drawable.TransitionDrawable t = new android.graphics.drawable.TransitionDrawable(new android.graphics.drawable.Drawable[]{
+                    new android.graphics.drawable.BitmapDrawable(getResources(), old),
+                    new android.graphics.drawable.BitmapDrawable(getResources(), bmp)});
+            t.setCrossFadeEnabled(true);
+            wallView.setImageDrawable(t);
+            t.startTransition(800);
+            // Drop the old picture once the fade is done, so only one 1080p bitmap stays in memory.
+            handler.postDelayed(() -> {
+                if (wallBitmap == bmp) wallView.setImageBitmap(bmp);
+            }, 900);
+        } else {
+            wallView.setImageBitmap(bmp);
+        }
+    }
+
+    /** Shows the next picture from the wallpapers folder; the position survives restarts. */
+    private void showNextWallpaper(boolean fade) {
+        android.content.SharedPreferences prefs = getSharedPreferences("wallpaper", MODE_PRIVATE);
+        int next = (prefs.getInt("index", -1) + 1) % wallpapers.size();
+        prefs.edit().putInt("index", next).apply();
+        wallShownAt = android.os.SystemClock.elapsedRealtime();
+        final File file = wallpapers.get(next);
+        wallDecoder.execute(() -> {
+            android.graphics.Bitmap bmp = movieMode ? centreOnSubject(decodeWallpaper(file)) : decodeWallpaper(file);
+            handler.post(() -> {
+                if (!isDestroyed()) setWallpaper(bmp, fade);
+            });
+        });
+    }
+
+    /** Switches to the next picture every wallpaper interval while Home is in front. */
+    private final Runnable wallTick = new Runnable() {
+        @Override
+        public void run() {
+            if (wallpapers.size() >= 2) showNextWallpaper(true);
+            handler.postDelayed(this, wallpaperIntervalMs);
+        }
+    };
+
+    /** Fetches the day's movie pictures in the background, then switches the rotation to them. */
+    private void refreshMoviesIfDue() {
+        if (!movieMode || movieRefreshRunning || !MovieWallpapers.due(this)) return;
+        movieRefreshRunning = true;
+        final Config cfg = config;
+        new Thread(() -> {
+            boolean changed = MovieWallpapers.refresh(getApplicationContext(), cfg);
+            handler.post(() -> {
+                movieRefreshRunning = false;
+                if (!changed || isDestroyed()) return;
+                List<File> movies = MovieWallpapers.list(this);
+                if (movies.isEmpty()) return;
+                // Switch straight to the movies when the rotation was still on the theme's own pictures.
+                boolean wasMovies = !wallpapers.isEmpty()
+                        && MovieWallpapers.DIR.equals(wallpapers.get(0).getParentFile().getName());
+                wallpapers = movies;
+                if (!wasMovies) showNextWallpaper(wallBitmap != null);
+                if (!isFinishing() && hasWindowFocus()) startWallpaperRotation();
+            });
+        }, "movie-wallpapers").start();
+    }
+
+    /** Whenever Home comes back: picks the rotation up where the interval left it. */
+    private void startWallpaperRotation() {
+        refreshMoviesIfDue();
+        handler.removeCallbacks(wallTick);
+        if (wallpapers.size() < 2 || wallpaperIntervalMs <= 0) return;
+        long waited = android.os.SystemClock.elapsedRealtime() - wallShownAt;
+        handler.postDelayed(wallTick, Math.max(0, wallpaperIntervalMs - waited));
     }
 
     /**
@@ -390,6 +540,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         updateGreeting();
         updateWifiLabel();
         updateInputsButton();
+        startWallpaperRotation();
         handler.postDelayed(minuteTick, MINUTE_MS);
     }
 
@@ -460,6 +611,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         super.onPause();
         unregisterReceiver(packageReceiver);
         handler.removeCallbacks(minuteTick);
+        handler.removeCallbacks(wallTick);
         // Nothing of ours stays on screen over another app; an undecided prompt simply returns next time.
         if (cardPrompt != null) cardPrompt.dismiss();
         if (openPopup != null) openPopup.dismiss();
@@ -474,6 +626,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        wallDecoder.shutdownNow();
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         TvInputManager tim = (TvInputManager) getSystemService(TV_INPUT_SERVICE);
         if (tim != null) tim.unregisterCallback(inputCallback);
@@ -508,7 +661,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             lp.width = (int) w;
             lp.height = (int) h;
             glass.setLayoutParams(lp);
-            glass.setRadius(AppAdapter.cornerRadius(card.getWidth(), density) * AppAdapter.FOCUS_SCALE + pad);
+            // The rim is drawn inset by pad, right on the zoomed tile, so its corners use the tile's radius as is.
+            glass.setRadius(AppAdapter.cornerRadius(card.getWidth(), density) * AppAdapter.FOCUS_SCALE);
         }
         glassTargetX = x;
         glassTargetY = y;
@@ -584,12 +738,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 heroName.setTranslationX(12 * density);
                 heroName.animate().alpha(1f).translationX(0f).setDuration(200).start();
             }).start();
-            if (color != ambientColor) {
-                ambient.animate().alpha(0.35f).setDuration(200).withEndAction(() -> {
-                    setAmbient(color);
-                    ambient.animate().alpha(1f).setDuration(500).start();
-                }).start();
-            }
+            // Blend straight from this app's colour to the next one, with no dip to plain in between.
+            if (color != ambientColor) setAmbient(color, true);
         } else {
             heroName.setY(y);
         }
@@ -602,7 +752,17 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      * over the screen is one texture; changing apps only uploads it once.
      */
     private void setAmbient(int color) {
+        setAmbient(color, false);
+    }
+
+    /** With crossFade, the old glow fades into the new one (two small textures, one blend). */
+    private void setAmbient(int color, boolean crossFade) {
         if (color == ambientColor && ambient.getBackground() != null) return;
+        android.graphics.drawable.Drawable old = ambient.getBackground();
+        if (old instanceof android.graphics.drawable.TransitionDrawable) {
+            android.graphics.drawable.TransitionDrawable t = (android.graphics.drawable.TransitionDrawable) old;
+            old = t.getDrawable(t.getNumberOfLayers() - 1);   // a blend still running: start from where it was heading
+        }
         ambientColor = color;
         int c = color & 0x00FFFFFF;
         int w = 480;
@@ -618,7 +778,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         canvas.drawRect(0, 0, w, h, paint);
         BitmapDrawable drawable = new BitmapDrawable(getResources(), bmp);
         drawable.setGravity(Gravity.FILL);
-        ambient.setBackground(drawable);
+        if (crossFade && old != null) {
+            android.graphics.drawable.TransitionDrawable t = new android.graphics.drawable.TransitionDrawable(
+                    new android.graphics.drawable.Drawable[]{old, drawable});
+            t.setCrossFadeEnabled(true);
+            ambient.setBackground(t);
+            t.startTransition(450);
+        } else {
+            ambient.setBackground(drawable);
+        }
     }
 
     private void hideHero() {
@@ -662,7 +830,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     private void focusTile(int position) {
         if (adapter.getItemCount() == 0) {
-            btnWifi.requestFocus();
+            (btnWifi.getVisibility() == View.VISIBLE ? btnWifi : findViewById(R.id.btnSettings)).requestFocus();
             return;
         }
         final int pos = Math.max(0, Math.min(position, adapter.getItemCount() - 1));
@@ -704,6 +872,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     /** Shows the Wi-Fi network name on the button when we can read it, otherwise the connection type. */
     private void updateWifiLabel() {
+        if (btnWifi.getVisibility() == View.GONE) return;   // show_network_pill off
         String text = getString(R.string.wifi);
         boolean vpn = false, online = false;
         int icon = R.drawable.ic_wifi;
@@ -899,7 +1068,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 int state = hdmi && hdmiStateBogus ? -1 : tim.getInputState(id);
                 if (!hdmi && rows.getChildCount() > 0 && !sawNonHdmi) addSeparator(rows);
                 if (!hdmi) sawNonHdmi = true;
-                addInputRow(rows, popup, hdmi ? R.drawable.ic_input : R.drawable.ic_av, label, state,
+                addInputRow(rows, popup, hdmi ? R.drawable.ic_hdmi : R.drawable.ic_av, label, state,
                         () -> openInput(id));
             }
         }

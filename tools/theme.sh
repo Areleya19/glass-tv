@@ -20,7 +20,7 @@ DIR=/sdcard/Android/data/$PKG/files
 tv() { "$PY" -I tv.py "$@"; }
 
 if [ "${1:-}" = --reset ]; then
-  tv "rm -f $DIR/config.json $DIR/wallpaper.jpg; am force-stop $PKG; am start -n $PKG/.MainActivity >/dev/null; echo reset" | tail -n 1
+  tv "rm -rf $DIR/config.json $DIR/wallpaper.jpg $DIR/wallpapers; am force-stop $PKG; am start -n $PKG/.MainActivity >/dev/null; echo reset" | tail -n 1
   exit 0
 fi
 THEME="${THEME_ARG:?usage: theme.sh <theme folder> | --reset}"
@@ -34,6 +34,15 @@ if [ -f "$THEME/wallpaper.jpg" ]; then
   "$PY" -I b64push.py "$THEME/wallpaper.jpg" "$DIR/wallpaper.jpg"
 else
   tv "rm -f $DIR/wallpaper.jpg" >/dev/null
+fi
+# A wallpapers/ folder is a rotation: the launcher shows one picture after another (wallpaper_minutes).
+tv "rm -rf $DIR/wallpapers" >/dev/null
+if [ -d "$THEME/wallpapers" ]; then
+  tv "mkdir -p $DIR/wallpapers" >/dev/null
+  for f in "$THEME"/wallpapers/*.jpg "$THEME"/wallpapers/*.jpeg "$THEME"/wallpapers/*.png; do
+    [ -f "$f" ] || continue
+    "$PY" -I b64push.py "$f" "$DIR/wallpapers/$(basename "$f")" | tail -n 1
+  done
 fi
 tv "am force-stop $PKG; am start -n $PKG/.MainActivity >/dev/null; echo applied" | tail -n 1
 echo "Theme $(basename "$THEME") is on the TV. Undo with: tools/theme.sh --reset"

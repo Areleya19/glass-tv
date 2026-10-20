@@ -35,8 +35,14 @@ is ignored, and a file that doesn't parse is ignored as a whole, so a theme can 
 | `reduced_motion` | bool | Calmer motion for weak GPUs: stiff highlight spring, no tile overshoot, short fades, no entrance replay |
 | `vpn_app` | string | App the network pill opens when a VPN is configured; also shows a red "VPN off" badge while no VPN is up |
 | `show_home_settings_shortcut` | bool | The "Default home" tile, where the TV has a home picker |
+| `show_network_pill` | bool | The Wi-Fi / Ethernet pill in the top bar; `false` hides it |
 | `background_color` | `#RRGGBB` | Colour behind everything; black by default |
 | `wallpaper` | bool | Show `wallpaper.jpg` from the theme folder (`true`), or ignore it (`false`) |
+| `wallpaper_minutes` | 0 to 1440 | Minutes between pictures when the theme has a `wallpapers/` folder; 0 changes only when Home starts. Default 30 |
+| `tmdb_api_key` | string | A free [TMDB](https://www.themoviedb.org/settings/api) API key or read token: the launcher fetches backdrops of the most popular films of the last 75 days once a day and rotates through them, dimmed. Empty: off, and the launcher never goes online |
+| `movie_region` | string | Two-letter country for release dates, e.g. `MY` |
+| `movie_genres` | string | TMDB genre ids to keep: `|` means any of them, `,` means all of them, e.g. `16|10751` (animation or family); empty keeps all |
+| `movie_excluded_genres` | string | Genre ids left out; default `27,53` (horror, thriller) |
 
 ## Wallpapers
 

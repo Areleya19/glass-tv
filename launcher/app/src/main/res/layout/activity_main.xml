@@ -189,7 +189,8 @@
         </RelativeLayout>
 
         <!-- The wrapper clips at the grid's edge; the grid itself must not clip so scaled tiles can overflow their cells. -->
-        <FrameLayout
+        <com.gathin.tvhome.FadeTopFrame
+            android:id="@+id/gridWrap"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
@@ -206,7 +207,7 @@
                 android:overScrollMode="never"
                 android:scrollbars="none"
                 android:descendantFocusability="afterDescendants" />
-        </FrameLayout>
+        </com.gathin.tvhome.FadeTopFrame>
     </LinearLayout>
 
     <!-- The single floating glass highlight that springs between tiles. -->

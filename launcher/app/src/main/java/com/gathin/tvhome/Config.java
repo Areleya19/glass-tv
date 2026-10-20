@@ -30,6 +30,8 @@ final class Config {
     private static final String TAG = "TvHome.Config";
     static final String FILE_NAME = "config.json";
     static final String WALLPAPER_NAME = "wallpaper.jpg";
+    /** Folder of pictures the launcher rotates through, in file-name order (tools/theme.sh pushes a theme's wallpapers/). */
+    static final String WALLPAPERS_DIR = "wallpapers";
 
     final List<String> dockApps;
     final List<String> hiddenApps;
@@ -46,10 +48,20 @@ final class Config {
     final boolean reducedMotion;
     final String vpnApp;
     final boolean showHomeSettingsShortcut;
+    /** The Wi-Fi / Ethernet pill in the top bar (config.xml, show_network_pill). */
+    final boolean showNetworkPill;
     /** Background colour behind everything, #RRGGBB; black unless a theme says otherwise. */
     final int backgroundColor;
     /** Full-screen picture behind the launcher, or null for the plain colour. */
     final File wallpaper;
+    /** Pictures to rotate through, empty for none; when present they replace {@link #wallpaper}. */
+    final List<File> wallpapers;
+    /** Time between wallpaper changes (wallpaper_seconds, else wallpaper_minutes); 0 changes only when Home starts. */
+    final long wallpaperIntervalMs;
+    /** TMDB key for recent-movie wallpapers (tmdb_api_key, config.json only); empty keeps them off. */
+    final String tmdbApiKey;
+    /** TMDB filters: release region (e.g. MY), genre ids to keep, genre ids to leave out. */
+    final String movieRegion, movieGenres, movieExcludedGenres;
     /** Whether the overlay file was present and parsed. */
     final boolean overlayApplied;
 
@@ -57,8 +69,10 @@ final class Config {
                    String sourcePanelService, String sourcePanelAction, String inputAction,
                    int columns, int rowsBelowDock,
                    boolean shamsiDate, boolean moduleCards, boolean reducedMotion, String vpnApp,
-                   boolean showHomeSettingsShortcut, int backgroundColor,
-                   File wallpaper, boolean overlayApplied) {
+                   boolean showHomeSettingsShortcut, boolean showNetworkPill, int backgroundColor,
+                   File wallpaper, List<File> wallpapers, long wallpaperIntervalMs,
+                   String tmdbApiKey, String movieRegion, String movieGenres, String movieExcludedGenres,
+                   boolean overlayApplied) {
         this.dockApps = Collections.unmodifiableList(dockApps);
         this.hiddenApps = Collections.unmodifiableList(hiddenApps);
         this.liveTvPackage = liveTvPackage;
@@ -73,8 +87,15 @@ final class Config {
         this.reducedMotion = reducedMotion;
         this.vpnApp = vpnApp;
         this.showHomeSettingsShortcut = showHomeSettingsShortcut;
+        this.showNetworkPill = showNetworkPill;
         this.backgroundColor = backgroundColor;
         this.wallpaper = wallpaper;
+        this.wallpapers = Collections.unmodifiableList(wallpapers);
+        this.wallpaperIntervalMs = wallpaperIntervalMs;
+        this.tmdbApiKey = tmdbApiKey;
+        this.movieRegion = movieRegion;
+        this.movieGenres = movieGenres;
+        this.movieExcludedGenres = movieExcludedGenres;
         this.overlayApplied = overlayApplied;
     }
 
@@ -99,6 +120,7 @@ final class Config {
         boolean reducedMotion = res.getBoolean(R.bool.reduced_motion);
         String vpn = res.getString(R.string.vpn_app).trim();
         boolean homeSettings = res.getBoolean(R.bool.show_home_settings_shortcut);
+        boolean networkPill = res.getBoolean(R.bool.show_network_pill);
         int background = 0xFF000000;
         boolean applied = false;
 
@@ -121,16 +143,35 @@ final class Config {
             reducedMotion = bool(json, "reduced_motion", reducedMotion);
             vpn = string(json, "vpn_app", vpn);
             homeSettings = bool(json, "show_home_settings_shortcut", homeSettings);
+            networkPill = bool(json, "show_network_pill", networkPill);
             background = color(json, "background_color", background);
         }
         File wallpaper = dir != null ? new File(dir, WALLPAPER_NAME) : null;
         if (wallpaper != null && !(wallpaper.isFile() && wallpaper.length() > 0)) wallpaper = null;
         // A theme can also switch the wallpaper off while the file is still there.
-        if (json != null && json.has("wallpaper") && !bool(json, "wallpaper", true)) wallpaper = null;
+        boolean wallpaperOn = !(json != null && json.has("wallpaper") && !bool(json, "wallpaper", true));
+        if (!wallpaperOn) wallpaper = null;
+        List<File> wallpapers = new ArrayList<>();
+        File[] pics = dir != null && wallpaperOn ? new File(dir, WALLPAPERS_DIR).listFiles() : null;
+        if (pics != null) {
+            for (File f : pics) {
+                String n = f.getName().toLowerCase(java.util.Locale.ROOT);
+                if (f.isFile() && f.length() > 0 && (n.endsWith(".jpg") || n.endsWith(".jpeg") || n.endsWith(".png"))) wallpapers.add(f);
+            }
+            Collections.sort(wallpapers);
+        }
+        int wallpaperMinutes = json != null ? integer(json, "wallpaper_minutes", 30, 0, 1440) : 30;
+        int wallpaperSeconds = json != null ? integer(json, "wallpaper_seconds", 0, 5, 86400) : 0;
+        long wallpaperIntervalMs = wallpaperSeconds > 0 ? wallpaperSeconds * 1000L : wallpaperMinutes * 60_000L;
+        String tmdbKey = json != null && wallpaperOn ? string(json, "tmdb_api_key", "") : "";
+        String movieRegion = json != null ? string(json, "movie_region", "") : "";
+        String movieGenres = json != null ? string(json, "movie_genres", "") : "";
+        String movieExcluded = json != null ? string(json, "movie_excluded_genres", "") : "";
 
         return new Config(dock, hidden, liveTv, liveTvAction, panelService, panelAction, inputAction,
                 Math.max(1, columns), Math.max(0, rowsBelow), shamsi, moduleCards, reducedMotion,
-                vpn, homeSettings, background, wallpaper, applied);
+                vpn, homeSettings, networkPill, background, wallpaper, wallpapers, wallpaperIntervalMs,
+                tmdbKey, movieRegion, movieGenres, movieExcluded, applied);
     }
 
     /** Reads and parses the overlay; any problem means "no overlay", never a crash on the home screen. */
