@@ -388,8 +388,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
     /**
      * Movie backdrops often frame their characters to one side, leaving room for a title. Finds where the
-     * detail is (edge energy on a 64 x 36 thumbnail; faces and props are sharp, backgrounds soft), then
-     * crops a slightly zoomed 16:9 window around it so the subject sits nearer the middle of the screen.
+     * detail is (squared edge energy on a 64 x 36 thumbnail, so the sharpest parts, faces and props, count
+     * most), then crops a 16:9 window zoomed just enough to bring the subject to the middle (1.15x to 1.7x).
+     * It follows the subject only halfway up or down, so heads and feet stay in the picture.
      */
     private static android.graphics.Bitmap centreOnSubject(android.graphics.Bitmap src) {
         if (src == null) return null;
@@ -410,6 +411,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                     float gx = lum[y * tw + x + 1] - lum[y * tw + x - 1];
                     float gy = lum[(y + 1) * tw + x] - lum[(y - 1) * tw + x];
                     double e = gx * gx + gy * gy;
+                    e *= e;
                     sum += e;
                     sx += e * x;
                     sy += e * y;
@@ -417,8 +419,9 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
             if (sum <= 0) return src;
             float fx = (float) (sx / sum) / (tw - 1), fy = (float) (sy / sum) / (th - 1);
-            // 1/1.3 of the picture each way: enough room to move the subject in, little detail lost.
-            int cw = Math.round(src.getWidth() / 1.3f), ch = Math.round(src.getHeight() / 1.3f);
+            float zoom = Math.min(1.7f, Math.max(1.15f, 1f / Math.max(0.001f, 2f * Math.min(fx, 1f - fx))));
+            fy = 0.5f * fy + 0.25f;
+            int cw = Math.round(src.getWidth() / zoom), ch = Math.round(src.getHeight() / zoom);
             int x = Math.max(0, Math.min(src.getWidth() - cw, Math.round(fx * src.getWidth() - cw / 2f)));
             int y = Math.max(0, Math.min(src.getHeight() - ch, Math.round(fy * src.getHeight() - ch / 2f)));
             android.graphics.Bitmap out = android.graphics.Bitmap.createBitmap(src, x, y, cw, ch);
