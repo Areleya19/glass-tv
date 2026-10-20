@@ -1405,14 +1405,33 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         popup.setWidth(Math.max(width, panel.getMeasuredWidth()));
 
         glideBetweenRows((FrameLayout) panel, rows);
-        // Up from the first row closes the menu and goes back to the Inputs pill, which never lost
-        // its place underneath.
+        // One selection at a time: while the menu is open it lives on the menu's rows, and the
+        // Inputs pill goes back to glass.
+        glider.hide();
+        final boolean[] handedBack = {false};
+        popup.setOnDismissListener(() -> {
+            if (openPopup == popup) openPopup = null;
+            // Closed by Back or by choosing an input: the selection settles back on the pill.
+            if (!handedBack[0] && btnInputs.hasFocus()) moveTopHighlight(btnInputs);
+        });
+        // Up from the first row closes the menu: its dark selection slides up out of the row and
+        // merges into the Inputs pill, ending at the pill's own darkness rather than adding to it.
         for (int i = 0; i < rows.getChildCount(); i++) {
             View first = rows.getChildAt(i);
             if (!first.isFocusable()) continue;
             first.setOnKeyListener((v, keyCode, event) -> {
                 if (keyCode != KeyEvent.KEYCODE_DPAD_UP) return false;
-                if (event.getAction() == KeyEvent.ACTION_DOWN) popup.dismiss();
+                if (event.getAction() != KeyEvent.ACTION_DOWN) return true;
+                int[] rowAt = new int[2], gliderAt = new int[2];
+                v.getLocationOnScreen(rowAt);
+                glider.getLocationOnScreen(gliderAt);
+                float l = rowAt[0] - gliderAt[0], t = rowAt[1] - gliderAt[1];
+                gliderOnPill = true;
+                glider.setStyle(Glider.DARK);
+                glider.appearAt(l, t, l + v.getWidth(), t + v.getHeight(), 13 * density);
+                handedBack[0] = true;
+                popup.dismiss();
+                moveTopHighlight(btnInputs);
                 return true;
             });
             break;

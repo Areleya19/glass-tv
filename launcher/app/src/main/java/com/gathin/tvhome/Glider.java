@@ -115,6 +115,22 @@ final class Glider extends View {
         }
     }
 
+    /**
+     * Shows the shape at once on a rectangle, at full strength and with no fade, so it can glide on
+     * from there: the Inputs menu's selection handing over to the top menu as the menu closes.
+     */
+    void appearAt(float l, float t, float r, float b, float radius) {
+        float[] to = {l, t - yShift, r, b - yShift, radius};
+        for (int i = 0; i < springs.length; i++) {
+            springs[i].cancel();
+            edges[i] = to[i];
+        }
+        if (fade != null) fade.cancel();
+        shown = true;
+        opacity = 1f;
+        changed();
+    }
+
     /** Runs {@code then} once the shape comes to rest from the glide now under way. */
     void onArrive(Runnable then) {
         arrival = then;
