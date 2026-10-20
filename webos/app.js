@@ -20,6 +20,12 @@
   var rowsEl = $('rows'), glider = $('glider'), hero = $('hero'), glow = $('glow');
   var pills = [$('inputs'), $('settings')];
   var apps = [], tiles = [], inputs = [];
+  /** Hold OK on an app: its menu (Move, Open), and whether it is being moved. */
+  var hold = { open: false, index: 0, rows: [], timer: 0, fired: false };
+  var moving = false;
+  var HOLD_MS = 600, ORDER_KEY = 'glasstv.order';
+  var MOVE_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12,3V21M3,12H21M9.5,5.5L12,3L14.5,5.5M9.5,18.5L12,21L14.5,18.5M5.5,9.5L3,12L5.5,14.5M18.5,9.5L21,12L18.5,14.5"/></svg>';
+  var OPEN_ICON = '<svg viewBox="0 0 24 24" fill="#fff"><path d="M8,5.5v13l10.5,-6.5z"/></svg>';
   /** The Inputs menu: open or not, and which row is selected. */
   var menu = { open: false, index: 0, rows: [] };
   var HDMI_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6"><path d="M3,7.5H21V12.5L18.5,16.5H5.5L3,12.5Z"/><path d="M7,11H17"/></svg>';
@@ -95,16 +101,9 @@
     buildMenu();
     // The selection lives in the rows too, above the tray's glass and under the tiles.
     rowsEl.appendChild(glider);
+    buildHold();
     tiles = [];
-    var r = null;
     for (var i = 0; i < apps.length; i++) {
-      var row = Math.floor(i / COLUMNS), col = i % COLUMNS;
-      if (col === 0) {
-        r = document.createElement('div');
-        r.className = 'row';
-        r.style.top = rowTop(row) + 'px';
-        rowsEl.appendChild(r);
-      }
       var a = apps[i], t = document.createElement('div');
       t.className = 'tile';
       t.style.backgroundColor = a.color;
@@ -121,16 +120,127 @@
         w.textContent = a.title;
         t.appendChild(w);
       }
-      r.appendChild(t);
+      rowsEl.appendChild(t);
       // The name shows under a grid tile when it is selected; the dock has none.
       var n = document.createElement('div');
       n.className = 'name';
       n.textContent = a.title;
-      n.style.left = (LEFT + col * (TILE_W + GAP)) + 'px';
-      n.style.top = (rowTop(row) + TILE_H + 14) + 'px';
       rowsEl.appendChild(n);
       tiles.push({ el: t, name: n, app: a });
     }
+    layoutTiles();
+  }
+
+  /** Puts every tile in its slot; a tile whose slot changed slides there. */
+  function layoutTiles() {
+    tiles.forEach(function (t, i) {
+      var row = Math.floor(i / COLUMNS), col = i % COLUMNS, x = LEFT + col * (TILE_W + GAP);
+      t.el.style.left = x + 'px';
+      t.el.style.top = rowTop(row) + 'px';
+      t.name.style.left = x + 'px';
+      t.name.style.top = (rowTop(row) + TILE_H + 14) + 'px';
+    });
+  }
+
+  // ---- arranging the apps --------------------------------------------------------------------------
+
+  function key(a) { return a.id || a.title; }
+
+  /** The order someone arranged, then any app installed since, in the TV's own order. */
+  function ordered(list) {
+    var saved = [];
+    try { saved = JSON.parse(localStorage.getItem(ORDER_KEY)) || []; } catch (e) {}
+    var pos = {};
+    saved.forEach(function (k, i) { pos[k] = i; });
+    return list.map(function (a, i) { return { a: a, i: i }; }).sort(function (x, y) {
+      var px = pos[key(x.a)], py = pos[key(y.a)];
+      if (px !== undefined && py !== undefined) return px - py;
+      if (px !== undefined) return -1;
+      if (py !== undefined) return 1;
+      return x.i - y.i;
+    }).map(function (x) { return x.a; });
+  }
+
+  function saveOrder() {
+    try { localStorage.setItem(ORDER_KEY, JSON.stringify(apps.map(key))); } catch (e) {}
+  }
+
+  /** The menu held OK brings up, above the app. */
+  function buildHold() {
+    var glass = document.createElement('div'), items = document.createElement('div');
+    glass.id = 'holdGlass';
+    glass.className = 'glass';
+    items.id = 'holdItems';
+    hold.rows = [];
+    [['Move', MOVE_ICON, 'move'], ['Open', OPEN_ICON, 'open']].forEach(function (r) {
+      var row = document.createElement('div');
+      row.className = 'mrow';
+      row.innerHTML = r[1] + '<span></span>';
+      row.lastChild.textContent = r[0];
+      items.appendChild(row);
+      hold.rows.push({ el: row, action: r[2] });
+    });
+    rowsEl.appendChild(glass);
+    rowsEl.appendChild(items);
+  }
+
+  function openHold(open) {
+    hold.open = open;
+    hold.index = 0;
+    var glass = $('holdGlass'), items = $('holdItems');
+    if (open) {
+      var x = LEFT + focus.col * (TILE_W + GAP), width = 300;
+      items.style.width = glass.style.width = width + 'px';
+      hold.left = x + (TILE_W - width) / 2;
+      hold.top = rowTop(focus.row) - items.offsetHeight - 28;
+      [glass, items].forEach(function (el) { el.style.left = hold.left + 'px'; el.style.top = hold.top + 'px'; });
+      glass.style.height = items.offsetHeight + 'px';
+    }
+    glass.classList.toggle('open', open);
+    items.classList.toggle('open', open);
+    show();
+  }
+
+  function holdKey(code) {
+    if (code === KEY.UP) hold.index = Math.max(0, hold.index - 1);
+    else if (code === KEY.DOWN) hold.index = Math.min(hold.rows.length - 1, hold.index + 1);
+    else if (code === KEY.BACK) return openHold(false);
+    else if (code === KEY.OK) {
+      var action = hold.rows[hold.index].action;
+      openHold(false);
+      if (action === 'open') launch(tiles[index(focus)].app.id);
+      else startMove();
+      return;
+    } else return;
+    show();
+  }
+
+  /** Picks the app up: it wiggles, the arrows carry it and the others slide aside; OK puts it down. */
+  function startMove() {
+    moving = true;
+    tiles[index(focus)].el.classList.add('wiggle');
+    show();
+  }
+
+  function moveKey(code) {
+    var from = index(focus), to = from;
+    if (code === KEY.LEFT) to = from - 1;
+    else if (code === KEY.RIGHT) to = from + 1;
+    else if (code === KEY.UP) to = from - COLUMNS;
+    else if (code === KEY.DOWN) to = from + COLUMNS;
+    else if (code === KEY.OK || code === KEY.BACK) {
+      moving = false;
+      tiles[from].el.classList.remove('wiggle');
+      saveOrder();
+      return show();
+    } else return;
+    to = Math.max(0, Math.min(apps.length - 1, to));
+    if (to === from) return;
+    tiles.splice(to, 0, tiles.splice(from, 1)[0]);
+    apps.splice(to, 0, apps.splice(from, 1)[0]);
+    focus = { row: Math.floor(to / COLUMNS), col: to % COLUMNS };
+    layoutTiles();
+    show();
   }
 
   function wordIfMissing(tile, a) {
@@ -218,11 +328,20 @@
     glider.style.borderRadius = radius + 'px';
     glider.style.transform = 'translate(' + x + 'px,' + y + 'px)';
     glider.style.opacity = 1;
+    // Over the hold menu's glass when that is open (it sits above the tiles); otherwise under the tiles.
+    glider.style.zIndex = hold.open ? 4 : 1;
   }
 
   function show() {
     tiles.forEach(function (t) { t.el.classList.remove('focus'); t.name.classList.remove('on'); });
     pills.forEach(function (p) { p.classList.remove('selected'); });
+    if (hold.open) {
+      var hr = hold.rows[hold.index].el;
+      tiles[index(focus)].el.classList.add('focus');
+      placeGlider(hold.left + hr.offsetLeft, hold.top + hr.offsetTop, hr.offsetWidth, hr.offsetHeight, 22, 'dark-style');
+      hero.style.opacity = 0;   // the menu sits where the place's lines are
+      return;
+    }
     if (menu.open) {
       // A dark row inside the menu's glass.
       rowsEl.style.transform = 'translateY(0)';
@@ -246,6 +365,12 @@
     rowsEl.style.transform = 'translateY(' + shift + 'px)';
     var t = tiles[index(focus)];
     t.el.classList.add('focus');
+    if (moving) {
+      // The moving app hides the selection behind it.
+      glider.style.opacity = 0;
+      hero.style.opacity = focus.row === 0 ? 1 : 0;
+      return;
+    }
     if (focus.row > 0) t.name.classList.add('on');
     // Behind the zoomed tile, worked out from the layout so it lands where the rows are going.
     var w = TILE_W * FOCUS_SCALE, h = TILE_H * FOCUS_SCALE;
@@ -313,6 +438,15 @@
   }
 
   document.addEventListener('keydown', function (e) {
+    if (hold.open || moving) {
+      if ([KEY.UP, KEY.DOWN, KEY.OK, KEY.BACK, KEY.LEFT, KEY.RIGHT].indexOf(e.keyCode) >= 0) {
+        // The OK that brought the menu up is still held: its repeats and release choose nothing.
+        if (e.keyCode === KEY.OK && (e.repeat || hold.fired)) { e.preventDefault(); return; }
+        if (hold.open) holdKey(e.keyCode); else moveKey(e.keyCode);
+        e.preventDefault();
+      }
+      return;
+    }
     if (menu.open) {
       if ([KEY.UP, KEY.DOWN, KEY.OK, KEY.BACK, KEY.LEFT, KEY.RIGHT].indexOf(e.keyCode) >= 0) {
         menuKey(e.keyCode);
@@ -328,7 +462,15 @@
       case KEY.OK:
         if (focus.row < 0 && pills[focus.col].id === 'inputs') openMenu(true);
         else if (focus.row < 0) launch(pills[focus.col].getAttribute('data-launch'));
-        else launch(tiles[index(focus)].app.id);
+        else if (!e.repeat && !hold.timer) {
+          // On an app, OK opens it when let go; held, it brings up the app's menu instead.
+          hold.fired = false;
+          hold.timer = setTimeout(function () {
+            hold.timer = 0;
+            hold.fired = true;
+            openHold(true);
+          }, HOLD_MS);
+        }
         break;
       case KEY.BACK:
         // As Home on Home: back to the first app.
@@ -338,6 +480,16 @@
       default: return;
     }
     e.preventDefault();
+  });
+
+  document.addEventListener('keyup', function (e) {
+    if (e.keyCode !== KEY.OK) return;
+    if (hold.timer) {
+      clearTimeout(hold.timer);
+      hold.timer = 0;
+      launch(tiles[index(focus)].app.id);
+    }
+    hold.fired = false;
   });
 
   // ---- clock -------------------------------------------------------------------------------------
@@ -380,12 +532,14 @@
   tick();
   setInterval(tick, 10 * 1000);
   loadApps(function (list) {
-    apps = list;
+    apps = ordered(list);
     build();
     // "#focus=row,col" starts with that selected, for previews (row -1 is the top bar).
     var m = /focus=(-?\d+),(\d+)/.exec(location.hash);
     if (m) focus = { row: +m[1], col: +m[2] };
     if (/menu/.test(location.hash)) { focus = { row: -1, col: 0 }; openMenu(true); }
+    if (/hold/.test(location.hash)) { focus = { row: 0, col: 1 }; openHold(true); }
+    if (/move/.test(location.hash)) { focus = { row: 0, col: 1 }; startMove(); moveKey(KEY.RIGHT); }
     show();
     // The buttons take their final size once the font is in: measure the selection and menu again.
     if (document.fonts && document.fonts.ready) {

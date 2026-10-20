@@ -61,17 +61,20 @@ header { position: absolute; left: 112px; right: 144px; top: 98px; display: flex
 
 /* ---- rows of apps --------------------------------------------------------------------------- */
 #rows { position: absolute; left: 0; right: 0; top: 0; height: 1080px; transition: transform .45s cubic-bezier(.2, .8, .2, 1); z-index: 2; }
-.row { position: absolute; left: 144px; display: flex; gap: 64px; }
 .tray { position: absolute; left: 116px; width: 1688px; height: 258px; border-radius: 52px; z-index: 0; }
-.row { z-index: 2; }
-.tile { position: relative; width: 360px; height: 202px; border-radius: 26px; overflow: hidden; flex: none;
+.tile { position: absolute; width: 360px; height: 202px; border-radius: 26px; overflow: hidden; z-index: 2;
   display: flex; align-items: center; justify-content: center; background: #2a2a30 center / cover no-repeat;
-  box-shadow: 0 14px 30px rgba(0, 0, 0, .35); transition: transform .26s cubic-bezier(.2, .8, .2, 1); }
+  box-shadow: 0 14px 30px rgba(0, 0, 0, .35);
+  transition: transform .26s cubic-bezier(.2, .8, .2, 1), left .25s ease, top .25s ease; }
+/* Picked up to move: it wiggles in place, above the others. */
+.tile.wiggle { z-index: 3; animation: wiggle .3s ease-in-out infinite alternate; box-shadow: 0 30px 60px rgba(0, 0, 0, .55); }
+@keyframes wiggle { from { transform: scale(1.07) rotate(-1.6deg); } to { transform: scale(1.07) rotate(1.6deg); } }
 .tile img { max-width: 130px; max-height: 130px; }
 .tile .label { position: absolute; left: 0; right: 0; bottom: 18px; text-align: center; font-size: 26px; font-weight: 500; }
 .tile .word { font-size: 44px; font-weight: 600; letter-spacing: -.01em; }
 .tile.focus { transform: scale(1.07); }
-.name { position: absolute; width: 360px; text-align: center; font-size: 28px; font-weight: 500; opacity: 0; transition: opacity .2s; }
+.name { position: absolute; width: 360px; text-align: center; font-size: 28px; font-weight: 500; opacity: 0;
+  transition: opacity .2s, left .25s ease, top .25s ease; }
 .name.on { opacity: 1; }
 
 /* The selection: a pane of glass behind a tile, dark behind a top-bar button. */
@@ -84,10 +87,13 @@ header { position: absolute; left: 112px; right: 144px; top: 98px; display: flex
 #glider.dark-style { background: rgba(10, 10, 16, .62); border: 0; box-shadow: 0 12px 28px rgba(0, 0, 0, .35); }
 
 /* ---- the Inputs menu: glass under the selection, its rows above it ---------------------------- */
-#menuGlass { position: absolute; border-radius: 40px; z-index: 0; opacity: 0; transition: opacity .2s; }
-#menuItems { position: absolute; z-index: 3; padding: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+#menuGlass, #holdGlass { position: absolute; border-radius: 40px; z-index: 0; opacity: 0; transition: opacity .2s; }
+#menuItems, #holdItems { position: absolute; z-index: 4; padding: 12px; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .mrow { position: relative; }
-#menuGlass.open, #menuItems.open { opacity: 1; }
+#menuGlass.open, #menuItems.open, #holdGlass.open, #holdItems.open { opacity: 1; }
+/* Above the tiles, over the app it belongs to; its dark row is drawn above it. */
+#holdGlass { z-index: 3; }
+#holdItems { z-index: 5; }
 .mrow { height: 84px; display: flex; align-items: center; gap: 26px; padding: 0 30px; font-size: 30px; font-weight: 500; }
 .mrow svg { width: 40px; height: 40px; flex: none; }
 .msep { height: 2px; background: rgba(255, 255, 255, .22); margin: 14px 30px; }

@@ -12,6 +12,7 @@ glass Inputs menu.
 | | On webOS |
 |---|---|
 | Glass look, places with names, clock, gliding selection, Inputs menu | Yes |
+| Arranging your apps: hold OK on an app, **Move**, carry it with the arrows, OK to put it down | Yes, remembered on the TV |
 | Listing and opening the TV's apps and HDMI / AV inputs | Yes, through webOS's application manager (to be confirmed on a real TV) |
 | Being the **home screen** | **No.** webOS lets no app replace its home screen: Glass TV is an app you open |
 | Debloating, cache cleaning, the clock screensaver | **No.** webOS gives apps no access to the system |
@@ -43,6 +44,7 @@ Developer Mode switches itself off after 50 hours unless you extend it in the De
 
 ## Previewing in a browser
 
-`index.html#focus=-1,0` starts with Inputs selected, `#menu` with the Inputs menu open. Sample tiles show
+`index.html#focus=-1,0` starts with Inputs selected, `#menu` with the Inputs menu open, `#hold` with an
+app's hold menu open, `#move` with an app being moved. Sample tiles show
 when there is no webOS application manager. Real app banners can be dropped into `webos/samples/`
 (`youtube.png`, `netflix.png`, ...): that folder is kept out of git, since they are other companies' logos.
