@@ -4,6 +4,10 @@
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:colorBackground">@android:color/black</item>
         <item name="android:windowAnimationStyle">@null</item>
+        <!-- No black placeholder while Home starts from scratch: what was on screen stays until Home
+             can show itself whole, then Home appears at once. The placeholder was black for most
+             of a second and then faded out over Home for another third of one. -->
+        <item name="android:windowDisablePreview">true</item>
     </style>
 
     <!-- Frosted pill, tvOS style. -->
