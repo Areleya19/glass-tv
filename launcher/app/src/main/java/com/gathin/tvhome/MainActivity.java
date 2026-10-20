@@ -159,6 +159,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private static final long RETURN_SETTLE_MS = 6000;
     /** True while Home rebuilds on return; focus passes through the pills then and must not light them. */
     private boolean resuming;
+    /** True while Home's first frame is held back (see holdFirstFrame). */
+    private boolean firstFrameHeld;
     private Dialog cardPrompt;
     /** Set when a decision could not be saved: no more prompts until the next resume, instead of asking in a loop. */
     private boolean promptsPaused;
@@ -891,7 +893,11 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             setHeroText(label, where, desc);
             heroShelf.setY(y);
             heroShelf.setTranslationX(0f);
-            heroShelf.animate().alpha(1f).setDuration(260).start();
+            // Coming back to Home, the words are simply there with the picture: faded in after the
+            // first frame, they arrived a beat behind everything else.
+            heroShelf.animate().cancel();
+            if (firstFrameHeld || resuming) heroShelf.setAlpha(1f);
+            else heroShelf.animate().alpha(1f).setDuration(260).start();
             showAmbient(color);
             heroShown = true;
         } else if (changed) {
@@ -1100,6 +1106,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      */
     private void holdFirstFrame() {
         final long start = android.os.SystemClock.uptimeMillis();
+        firstFrameHeld = true;
         final boolean expectsWallpaper = !wallpapers.isEmpty() || (config.wallpaper != null && !placesMode);
         root.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
             @Override
@@ -1107,12 +1114,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 // Parked here rather than by the layout listener alone: while frames are held, the
                 // second layout pass that listener relies on does not always come.
                 boolean parked = parkDock();
+                // The place's name and lines come in the same frame as the picture they describe,
+                // whenever focus lands in the dock, where the shelf shows.
                 boolean whole = adapter.getItemCount() > 0 && grid.getChildCount() > 0 && parked
-                        && (wallBitmap != null || !expectsWallpaper);
+                        && (wallBitmap != null || !expectsWallpaper) && (heroShown || lastFocused >= COLUMNS);
                 if (!whole && android.os.SystemClock.uptimeMillis() - start < FIRST_FRAME_WAIT_MS) {
                     return false;   // skip this frame; the next traversal asks again
                 }
                 root.getViewTreeObserver().removeOnPreDrawListener(this);
+                firstFrameHeld = false;
                 android.util.Log.i("TvHome.Perf", "first frame after " + (android.os.SystemClock.uptimeMillis() - start)
                         + " ms" + (whole ? "" : " (gave up waiting: tiles=" + adapter.getItemCount()
                         + " laidOut=" + grid.getChildCount() + " dockParked=" + parked

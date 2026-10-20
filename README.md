@@ -7,7 +7,7 @@ Clean TV keeps everything Clean Your TV does — debloat any Android TV over Wi-
 and swap the ad-filled home screen for a light Apple TV-style launcher — and adds a home screen that shows a
 new set of places every week.
 
-![Home screen](docs/screenshots/home-movie.jpg)
+![Clean TV home screen, with a place to visit behind the apps](docs/screenshots/home-places.jpg)
 
 ## What Clean TV adds
 
