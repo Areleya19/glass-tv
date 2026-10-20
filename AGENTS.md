@@ -1,7 +1,8 @@
 # Instructions for AI agents
 
 You are helping someone set up **Glass TV** on their own TV: on Android TV and Google TV, debloat it and install
-this launcher as the home screen, with pictures of places behind it; on LG webOS, install the webOS app. This file is the playbook. It is written for any brand and for any
+this launcher as the home screen, with pictures of places behind it; on LG webOS or Samsung Tizen, install the
+app for that system. This file is the playbook. It is written for any brand and for any
 AI model, large or small. Follow it in order, and read [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 before you improvise a fix.
 
@@ -17,15 +18,18 @@ system that matters, not the brand: Hisense, Panasonic, Toshiba, TCL and Philips
 | Android TV 5, 6 or 7 | Debloat only: the launcher needs Android 8 | Steps 1 to 3, then step 7 |
 | Fire TV (Amazon sticks, Fire TV Edition TVs) | Debloat only: Fire OS takes Home back from any other launcher | Steps 1 to 3, then step 7 |
 | **LG (webOS)** | **The webOS app** (preview): an app you open, not the home screen; no debloat, no cache cleaning | [webos/README.md](webos/README.md) only. Not these steps: they are for Android |
-| Samsung (Tizen), Roku, VIDAA, Vizio SmartCast, Panasonic My Home Screen, Apple TV | Nothing: these cannot run either version | Stop |
+| **Samsung (Tizen)** | **The Samsung app** (preview): the webOS app in Samsung's packaging; an app you open, no Inputs button, no debloat | [tizen/README.md](tizen/README.md) only. Not these steps |
+| Roku, VIDAA, Vizio SmartCast, Panasonic My Home Screen, Apple TV | Nothing: these cannot run any version | Stop |
 
 How to tell them apart:
 - **Android**: About shows "Android TV OS" or an Android version, or the setup connects with `tools/tv.py
   --probe` (step 1). Confirm with `ro.build.version.sdk`: **26 or higher** for the launcher.
 - **webOS**: an LG TV; About shows "webOS TV" and a version. `tools/tv.py` cannot connect to it, and that is
   expected: webOS has no Android debugging. Only LG's tools (`ares-*`) and Developer Mode reach it.
-- Not sure: ask for a photo of the About screen. Never install the Android launcher on webOS or the webOS app
-  on Android; neither runs on the other.
+- **Tizen**: a Samsung TV; About shows "Tizen" or a Samsung model, and it is reached with Samsung's `sdb` and
+  `tizen` tools after Developer mode (Apps, then 1 2 3 4 5 on the remote).
+- Not sure: ask for a photo of the About screen. Install only the version for that system; none runs on the
+  others.
 
 For a TV that can only get "Nothing" or a partial install, tell the person plainly, and mention the option
 that gives them everything: a Google TV or Android TV box (Chromecast with Google TV, Xiaomi Mi Box, NVIDIA

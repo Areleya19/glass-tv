@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Glass TV for Samsung TVs (Tizen): the same web app as webos/, packaged for Samsung. -->
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets"
+        id="https://github.com/cocombee/glass-tv" version="0.1.0" viewmodes="maximized">
+    <tizen:application id="GlassTV001.GlassTV" package="GlassTV001" required_version="6.0"/>
+    <content src="index.html"/>
+    <feature name="http://tizen.org/feature/screen.size.all"/>
+    <icon src="largeIcon.png"/>
+    <name>Glass TV</name>
+    <!-- To list the TV's apps and open them, and to fetch the week's places. Nothing else. -->
+    <tizen:privilege name="http://tizen.org/privilege/application.info"/>
+    <tizen:privilege name="http://tizen.org/privilege/application.launch"/>
+    <tizen:privilege name="http://tizen.org/privilege/internet"/>
+    <tizen:profile name="tv-samsung"/>
+    <tizen:setting screen-orientation="landscape" context-menu="disable" background-support="disable"
+                   encryption="disable" install-location="auto" hwkey-event="enable"/>
+    <access origin="https://www.bing.com" subdomains="true"/>
+</widget>

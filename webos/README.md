@@ -1,5 +1,7 @@
 # Glass TV for LG webOS (preview)
 
+The same app also runs on Samsung TVs (Tizen): see [../tizen](../tizen/README.md).
+
 LG TVs run webOS, not Android, so the Android launcher cannot run on them. This folder is Glass TV's Home
 rebuilt as a webOS web app: the clock row, a new place to visit behind your apps every week, the glass dock
 and buttons, the selection that glides between them, the room taking the selected app's colour, and the

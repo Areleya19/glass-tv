@@ -61,8 +61,8 @@ while you are inside an app.
 
 **Using an AI coding agent** (Claude Code, Codex, Cursor, Copilot…)? Point it at this repository and ask it to
 set up your TV. [AGENTS.md](AGENTS.md) tells any agent, even a small model, how to do it safely on any Android TV or Google
-TV: it first works out which Glass TV your TV can run (the Android launcher, the LG webOS app, or neither on
-Samsung and Roku), then
+TV: it first works out which Glass TV your TV can run (the Android launcher, the LG or Samsung app, or none on
+Roku), then
 asks before each change, backs up first, never uninstalls, and checks each step with you as it goes.
 
 The full step-by-step guide for debloating and installing is in
@@ -81,10 +81,11 @@ Glass TV clears the TV's caches by itself every 15 days ([how](docs/cache-clean.
 from one computer instead, [`tools/cache-clean.sh`](docs/cache-clean.md) finds the TVs on your network and
 clears their caches, leaving sign-ins and app data untouched.
 
-## LG TVs (webOS)
+## LG and Samsung TVs
 
-LG TVs run webOS, which cannot run Android apps. For the full Glass TV, plug in a Google TV or Android TV box.
-A webOS version you open as an app, without debloating, is in preview in [webos/](webos/README.md).
+LG TVs run webOS and Samsung TVs run Tizen; neither can run Android apps. For the full Glass TV, plug in a
+Google TV or Android TV box. A version you open as an app, without debloating, is in preview for both:
+[webos/](webos/README.md) for LG, [tizen/](tizen/README.md) for Samsung.
 
 ## Places, or pictures of your own
 
