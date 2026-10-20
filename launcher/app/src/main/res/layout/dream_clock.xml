@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Screensaver (ClockDream): a grey analog clock with the time and date beneath, drifting a little each
-     minute. ClockDream adds the dial and sizes everything to the screen's height. -->
+     minute, on the same grey as the clock's face. ClockDream adds the dial and sizes everything to the
+     screen's height. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FF252528">
+    android:background="#FF242528">
 
     <LinearLayout
         android:id="@+id/dreamContent"
