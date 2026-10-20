@@ -103,6 +103,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     private String movieOverview = "";
     private int ambientColor = -1;
     private boolean heroShown;
+    /** The glow behind the tiles. It follows every app, while the shelf only names dock apps. */
+    private boolean ambientShown;
     /** Where the shelf's bottom edge belongs; its top follows once the lines have been measured. */
     private float heroBottom;
     private TextView greeting;
@@ -239,7 +241,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         heroDesc = findViewById(R.id.heroDesc);
         // A share of the space between the side paddings, so the description wraps into a column
         // rather than running the width of the screen. The title is one line and follows the same cap.
-        int usable = getResources().getDisplayMetrics().widthPixels - (int) ((68 + 56) * density);
+        int usable = getResources().getDisplayMetrics().widthPixels - (int) ((55 + 56) * density);
         heroMaxWidth = Math.round(usable * HERO_WIDTH_SHARE);
         heroName.setMaxWidth(heroMaxWidth);
         heroDesc.setMaxWidth(heroMaxWidth);
@@ -269,6 +271,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         grid.setHasFixedSize(true);
         grid.setItemAnimator(null);
         grid.addItemDecoration(new DockDecoration(COLUMNS, density));
+        // The top-right buttons line up with the dock, which is only known once the tiles are laid out.
+        grid.getViewTreeObserver().addOnGlobalLayoutListener(this::alignTopButtons);
         int enterAnim = reducedMotion ? R.anim.tile_enter_reduced : R.anim.tile_enter;
         float enterDelay = reducedMotion ? 0f : 0.06f;
         grid.setLayoutAnimation(new LayoutAnimationController(
@@ -590,6 +594,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             glass.setAlpha(0f);
             heroShown = false;
             heroShelf.setAlpha(0f);
+            ambientShown = false;
             ambient.setAlpha(0f);
         }
         reloadTiles();
@@ -726,7 +731,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             }
             showHero(position, scroll ? r.top - dy : r.top);
         } else {
-            hideHero();
+            // Below the dock there is no shelf, but the glow still takes this app's colour, so every
+            // tile lights the room the same way the dock does.
+            hideShelf();
+            showAmbient(adapter.ambientColorAt(position));
             // Scroll just enough so the whole glass (not only the tile) is visible.
             Rect want = new Rect(0, -(int) pad * 2, item.getWidth(), item.getHeight() + (int) pad);
             grid.requestChildRectangleOnScreen(item, want, reducedMotion);
@@ -753,12 +761,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             heroShelf.setY(y);
             heroShelf.setTranslationX(0f);
             heroShelf.setAlpha(1f);
-            setAmbient(color);
-            if (!heroShown) {
-                ambient.setAlpha(0f);
-                ambient.animate().alpha(1f).setDuration(160).start();
-                heroShown = true;
-            }
+            showAmbient(color);
+            heroShown = true;
             return;
         }
 
@@ -767,8 +771,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             heroShelf.setY(y);
             heroShelf.setTranslationX(0f);
             heroShelf.animate().alpha(1f).setDuration(260).start();
-            setAmbient(color);
-            ambient.animate().alpha(1f).setDuration(600).start();
+            showAmbient(color);
             heroShown = true;
         } else if (changed) {
             heroShelf.animate().alpha(0f).translationX(-12 * density).setDuration(120).withEndAction(() -> {
@@ -777,11 +780,35 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
                 heroShelf.setTranslationX(12 * density);
                 heroShelf.animate().alpha(1f).translationX(0f).setDuration(200).start();
             }).start();
-            // Blend straight from this app's colour to the next one, with no dip to plain in between.
-            if (color != ambientColor) setAmbient(color, true);
+            showAmbient(color);
         } else {
+            // Same words, different app: every dock app shares the film's name, so the colour has
+            // to follow focus on its own rather than ride along with a change of text.
             heroShelf.setY(y);
+            showAmbient(color);
         }
+    }
+
+    /**
+     * Lines the top-right buttons up with the dock: the Settings circle's right edge sits on the
+     * right edge of the last dock card, and Inputs follows on its left. Card width follows the
+     * column count and the screen, so the edge is measured rather than written down.
+     */
+    private void alignTopButtons() {
+        View row = findViewById(R.id.topButtons);
+        View settings = findViewById(R.id.btnSettings);
+        RecyclerView.ViewHolder last = grid.findViewHolderForAdapterPosition(COLUMNS - 1);
+        if (row == null || settings == null || settings.getWidth() == 0 || last == null) return;
+        View card = last.itemView.findViewById(R.id.card);
+        if (card == null || card.getWidth() == 0) return;
+        // Layout positions, not drawn ones: a focused card is scaled up, and the row's own shift
+        // must not be counted twice.
+        Rect c = new Rect(0, 0, card.getWidth(), card.getHeight());
+        root.offsetDescendantRectToMyCoords(card, c);
+        Rect s = new Rect(0, 0, settings.getWidth(), settings.getHeight());
+        root.offsetDescendantRectToMyCoords(settings, s);
+        float shift = c.right - s.right;
+        if (Math.abs(row.getTranslationX() - shift) >= 1f) row.setTranslationX(shift);
     }
 
     /** The shelf's two lines. An empty description takes no room, so the title keeps its place. */
@@ -891,11 +918,33 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         }
     }
 
+    /** Focus has left the apps altogether: both the shelf and the glow go. */
     private void hideHero() {
+        hideShelf();
+        if (!ambientShown) return;
+        ambientShown = false;
+        ambient.animate().alpha(0f).setDuration(reducedMotion ? 140 : 300).start();
+    }
+
+    private void hideShelf() {
         if (!heroShown) return;
         heroShown = false;
         heroShelf.animate().alpha(0f).setDuration(reducedMotion ? 100 : 160).start();
-        ambient.animate().alpha(0f).setDuration(reducedMotion ? 140 : 300).start();
+    }
+
+    /**
+     * Lights the room in this app's colour. From one app to the next it blends straight across,
+     * with no dip to plain in between, whether the move is along the dock, down into the grid or
+     * back up again.
+     */
+    private void showAmbient(int color) {
+        if (!ambientShown) {
+            setAmbient(color);
+            ambient.animate().alpha(1f).setDuration(reducedMotion ? 160 : 600).start();
+            ambientShown = true;
+        } else if (color != ambientColor) {
+            setAmbient(color, !reducedMotion);
+        }
     }
 
     private void hideGlass() {
