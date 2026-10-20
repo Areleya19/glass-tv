@@ -1538,12 +1538,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
             if (first == null) first = row;
             last = row;
             row.setOnFocusChangeListener((v, has) -> {
-                if (!has) return;
-                // The first row takes focus before it has been laid out: wait for the layout.
-                if (v.isLaidOut() && v.getWidth() > 0) glideToMenuRow(v);
-                else v.post(() -> {
-                    if (v.hasFocus()) glideToMenuRow(v);
-                });
+                if (has) glideToMenuRow(panel, rows, v);
             });
         }
         final View top = first, bottom = last;
@@ -1588,11 +1583,29 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         if (top != null) top.requestFocus();
     }
 
-    /** Glides Home's focus shape onto a row of the Inputs menu. */
-    private void glideToMenuRow(View row) {
-        row.getLocationInWindow(menuAt);
-        glider.getLocationInWindow(menuGliderAt);
-        float l = menuAt[0] - menuGliderAt[0], t = menuAt[1] - menuGliderAt[1];
+    /**
+     * Glides Home's focus shape onto a row of the Inputs menu. From layout positions, not on-screen
+     * ones: the rows slide into place as the menu opens, and the shape must land where the row ends
+     * up, not where it was when focus arrived. The first row takes focus before the menu has been
+     * laid out, so then it waits for the layout.
+     */
+    private void glideToMenuRow(View panel, View rows, View row) {
+        if (!panel.isLaidOut() || row.getHeight() == 0) {
+            panel.addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
+                @Override
+                public void onLayoutChange(View v, int l, int t, int r, int b, int ol, int ot, int or, int ob) {
+                    panel.removeOnLayoutChangeListener(this);
+                    // Still inside the layout pass here, where the panel does not count as laid
+                    // out yet: glide once the pass is over.
+                    panel.post(() -> {
+                        if (row.hasFocus()) glideToMenuRow(panel, rows, row);
+                    });
+                }
+            });
+            return;
+        }
+        float l = panel.getLeft() + rows.getLeft() + row.getLeft() - glider.getLeft();
+        float t = panel.getTop() + rows.getTop() + row.getTop() - glider.getTop();
         gliderOnPill = true;
         glider.setStyle(Glider.DARK);
         glider.moveTo(l, t, l + row.getWidth(), t + row.getHeight(), 13 * density);
