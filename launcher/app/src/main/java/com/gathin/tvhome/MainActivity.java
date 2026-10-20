@@ -40,6 +40,7 @@ import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.view.ViewGroup;
 import android.view.Window;
 import android.view.animation.AnimationUtils;
@@ -149,6 +150,10 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     /** The grid has been laid out and focused since the last resume; the card prompt waits for this. */
     private boolean tilesReady;
     private boolean tilesAnimatedOnce;
+    /** Grid rows left showing under the dock (config rows_below_dock). */
+    private int rowsBelowDockSetting;
+    /** The longest Home holds its first frame while it puts itself together (see holdFirstFrame). */
+    private static final long FIRST_FRAME_WAIT_MS = 1200;
     private static final long RETURN_SETTLE_MS = 6000;
     /** True while Home rebuilds on return; focus passes through the pills then and must not light them. */
     private boolean resuming;
@@ -244,6 +249,12 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         sourcePanelAction = cfg.sourcePanelAction;
 
         root = findViewById(R.id.root);
+        // The tiles' entrance plays once per TV boot. Android reclaims the launcher during long stays
+        // in big apps; starting again then is a return to Home, not a first launch.
+        long bootAt = System.currentTimeMillis() - android.os.SystemClock.elapsedRealtime();
+        android.content.SharedPreferences launch = getSharedPreferences("launch", MODE_PRIVATE);
+        if (Math.abs(launch.getLong("boot_at", 0) - bootAt) < 60_000) tilesAnimatedOnce = true;
+        else launch.edit().putLong("boot_at", bootAt).apply();
         root.setBackgroundColor(cfg.backgroundColor);
         config = cfg;
         wallpapers = cfg.wallpapers;
@@ -296,6 +307,7 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // top-bar pills redraw when a new blurred copy is ready.
         Backdrop.watch(grid);
         setUpGlider();
+        holdFirstFrame();
         for (int i = 0; i < grid.getItemDecorationCount(); i++) {
             if (grid.getItemDecorationAt(i) instanceof DockDecoration) {
                 ((DockDecoration) grid.getItemDecorationAt(i)).setGlider(glider);
@@ -320,19 +332,8 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
 
         // tvOS layout: push the dock row towards the bottom of the screen, leaving room for
         // rows_below_dock grid rows under it; the rest of the grid stays below until you press Down.
-        int rowsBelowDock = cfg.rowsBelowDock;
-        grid.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> {
-            int h = b - t;
-            // Item height follows the tile size, which follows the column count (AppAdapter.tileWidthPx).
-            int inner = (r - l) - grid.getPaddingLeft() - grid.getPaddingRight();
-            int itemH = AppAdapter.itemHeightPx(AppAdapter.tileHeightPx(AppAdapter.tileWidthPx(inner, COLUMNS, density)), density);
-            int dockRow = itemH + (int) ((6 + 12) * density);   // item height plus DockDecoration offsets
-            int gridRows = itemH * rowsBelowDock;
-            int want = Math.max(0, h - dockRow - gridRows - (int) (30 * density));
-            if (grid.getPaddingTop() != want) {
-                grid.setPadding(grid.getPaddingLeft(), want, grid.getPaddingRight(), grid.getPaddingBottom());
-            }
-        });
+        rowsBelowDockSetting = cfg.rowsBelowDock;
+        grid.addOnLayoutChangeListener((v, l, t, r, b, ol, ot, or, ob) -> parkDock());
 
         // Rows feather out under the top bar instead of being cut off. Always on, so it is there the moment
         // a row reaches the bar; at rest nothing sits in the band, and the band's layer is small.
@@ -559,11 +560,15 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
         // at full size and shrank it a moment later. After that the name changes with the picture,
         // or it would name the next film over the last one's picture while that one decodes.
         if (movieTitle == null) setMovie(file);
+        final boolean firstPicture = wallBitmap == null;
         wallDecoder.execute(() -> {
             android.graphics.Bitmap bmp = movieMode ? centreOnSubject(decodeWallpaper(file)) : decodeWallpaper(file);
-            // Blur it here, before it is shown, so the glass changes with the wallpaper, not after it.
+            // After the first picture, the blur is made here, before the picture is shown, so the glass
+            // changes with the wallpaper rather than after it. The first picture of a fresh start does
+            // not wait for its blur: Home is held for it, and the glass catches up a moment later.
             android.util.DisplayMetrics dm = getResources().getDisplayMetrics();
-            android.graphics.Bitmap blur = Backdrop.blur(bmp, dm.widthPixels, dm.heightPixels, movieMode ? 0xFF7A7A7A : 0);
+            android.graphics.Bitmap blur = firstPicture ? null
+                    : Backdrop.blur(bmp, dm.widthPixels, dm.heightPixels, movieMode ? 0xFF7A7A7A : 0);
             handler.post(() -> {
                 if (isDestroyed()) return;
                 setWallpaper(bmp, fade, blur);
@@ -738,6 +743,16 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) showCardPrompt();
+    }
+
+    /**
+     * Android is short of memory while Home sits behind another app: give back what can be remade,
+     * so the launcher is less likely to be reclaimed and Home comes back without starting over.
+     */
+    @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        if (level >= TRIM_MEMORY_BACKGROUND) Backdrop.trim();
     }
 
     @Override
@@ -1002,6 +1017,55 @@ public class MainActivity extends Activity implements AppAdapter.TileListener {
      */
     private void setAmbient(int color) {
         setAmbient(color, false);
+    }
+
+    /**
+     * The dock row sits towards the bottom of the screen, leaving room for rows_below_dock grid rows
+     * under it; the rest of the grid stays below until you press Down. Sets the grid's top padding
+     * for that, and says whether it was already right.
+     */
+    private boolean parkDock() {
+        int h = grid.getHeight();
+        if (h <= 0) return false;
+        // Item height follows the tile size, which follows the column count (AppAdapter.tileWidthPx).
+        int inner = grid.getWidth() - grid.getPaddingLeft() - grid.getPaddingRight();
+        int itemH = AppAdapter.itemHeightPx(AppAdapter.tileHeightPx(AppAdapter.tileWidthPx(inner, COLUMNS, density)), density);
+        int dockRow = itemH + (int) ((6 + 12) * density);   // item height plus DockDecoration offsets
+        int want = Math.max(0, h - dockRow - itemH * rowsBelowDockSetting - (int) (30 * density));
+        if (grid.getPaddingTop() == want) return true;
+        grid.setPadding(grid.getPaddingLeft(), want, grid.getPaddingRight(), grid.getPaddingBottom());
+        return false;
+    }
+
+    /**
+     * Home's first frame waits until Home is whole: tiles bound and laid out, the dock parked at the
+     * bottom and the wallpaper in. Drawn as soon as the window was ready, it showed the glass tray
+     * floating empty near the top, then the tiles, then the dock dropping into place. This matters
+     * most after a long stay in another app, when Android has reclaimed the launcher and Home starts
+     * from nothing. The wait is capped, so Home can never hang on a slow picture.
+     */
+    private void holdFirstFrame() {
+        final long start = android.os.SystemClock.uptimeMillis();
+        final boolean expectsWallpaper = !wallpapers.isEmpty() || config.wallpaper != null;
+        root.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                // Parked here rather than by the layout listener alone: while frames are held, the
+                // second layout pass that listener relies on does not always come.
+                boolean parked = parkDock();
+                boolean whole = adapter.getItemCount() > 0 && grid.getChildCount() > 0 && parked
+                        && (wallBitmap != null || !expectsWallpaper);
+                if (!whole && android.os.SystemClock.uptimeMillis() - start < FIRST_FRAME_WAIT_MS) {
+                    return false;   // skip this frame; the next traversal asks again
+                }
+                root.getViewTreeObserver().removeOnPreDrawListener(this);
+                android.util.Log.i("TvHome.Perf", "first frame after " + (android.os.SystemClock.uptimeMillis() - start)
+                        + " ms" + (whole ? "" : " (gave up waiting: tiles=" + adapter.getItemCount()
+                        + " laidOut=" + grid.getChildCount() + " dockParked=" + parked
+                        + " wallpaper=" + (wallBitmap != null) + ")"));
+                return true;
+            }
+        });
     }
 
     /** Tells the glass the glow's colour and strength, so what shows through matches around it. */

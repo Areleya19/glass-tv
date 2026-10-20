@@ -37,6 +37,14 @@ final class Backdrop {
     private static final int PASSES = 2;
 
     private static Bitmap blurred;
+    /**
+     * A finished-with blurred copy kept for the next picture to be drawn into, and the blur's two
+     * working arrays. On a TV that changes picture every few seconds, making these afresh each time
+     * churned several megabytes a minute, which is the kind of garbage that makes a long session lag.
+     */
+    private static Bitmap spare;
+    private static int[] pixels, scratch;
+    private static final Object SPARE_LOCK = new Object();
     /** While the wallpaper fades to a new picture, the glass fades from the old blur to the new one. */
     private static Bitmap previous;
     private static float blurMix = 1f;
@@ -76,7 +84,25 @@ final class Backdrop {
 
     /** Asks {@code view} to redraw whenever a new blurred copy or glow is ready. */
     static void watch(View view) {
+        // Popups come and go: drop the ones that have been collected before adding another.
+        for (int i = watchers.size() - 1; i >= 0; i--) if (watchers.get(i).get() == null) watchers.remove(i);
         watchers.add(new WeakReference<>(view));
+    }
+
+    /** Memory is short: let go of what can be remade. The copy on the glass stays. */
+    static void trim() {
+        synchronized (SPARE_LOCK) {
+            spare = null;
+            pixels = null;
+            scratch = null;
+        }
+    }
+
+    private static void keepSpare(Bitmap done) {
+        if (done == null || done == blurred) return;
+        synchronized (SPARE_LOCK) {
+            spare = done;
+        }
     }
 
     /**
@@ -108,15 +134,21 @@ final class Backdrop {
     static void present(Bitmap blur, long fadeMs) {
         if (blur == null) return;
         if (blurFade != null) blurFade.cancel();
-        previous = fadeMs > 0 ? blurred : null;
+        if (previous != null) keepSpare(previous);
+        Bitmap before = blurred;
+        previous = fadeMs > 0 ? before : null;
         blurred = blur;
+        if (previous == null) keepSpare(before);
         blurMix = previous != null ? 0f : 1f;
         if (previous != null) {
             blurFade = android.animation.ValueAnimator.ofFloat(0f, 1f);
             blurFade.setDuration(fadeMs);
             blurFade.addUpdateListener(a -> {
                 blurMix = (float) a.getAnimatedValue();
-                if (blurMix >= 1f) previous = null;
+                if (blurMix >= 1f && previous != null) {
+                    keepSpare(previous);
+                    previous = null;
+                }
                 invalidateWatchers();
             });
             blurFade.start();
@@ -127,7 +159,21 @@ final class Backdrop {
     private static Bitmap render(Bitmap src, int screenW, int screenH, int multiply) {
         int w = Math.max(1, screenW / SCALE);
         int h = Math.max(1, screenH / SCALE);
-        Bitmap out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Bitmap out = null;
+        int[] px, tmp;
+        synchronized (SPARE_LOCK) {
+            if (spare != null && spare.getWidth() == w && spare.getHeight() == h && spare.isMutable()) {
+                out = spare;
+                spare = null;
+            }
+            if (pixels == null || pixels.length != w * h) {
+                pixels = new int[w * h];
+                scratch = new int[w * h];
+            }
+            px = pixels;
+            tmp = scratch;
+        }
+        if (out == null) out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(out);
         canvas.drawColor(0xFF000000);
         // The same centre crop as ImageView.ScaleType.CENTER_CROP, at the small size.
@@ -141,9 +187,7 @@ final class Backdrop {
         if (multiply != 0) p.setColorFilter(new PorterDuffColorFilter(multiply, PorterDuff.Mode.MULTIPLY));
         canvas.drawBitmap(src, m, p);
 
-        int[] px = new int[w * h];
         out.getPixels(px, 0, w, 0, 0, w, h);
-        int[] tmp = new int[w * h];
         // Repeated box passes each way come close to a Gaussian, at a fraction of its cost.
         for (int pass = 0; pass < PASSES; pass++) {
             boxBlur(px, tmp, w, h, RADIUS, true);
