@@ -171,7 +171,20 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.Holder> {
     boolean reload(List<Cards.Card> cards) {
         PackageManager pm = ctx.getPackageManager();
         Intent probe = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
-        List<ResolveInfo> found = pm.queryIntentActivities(probe, 0);
+        List<ResolveInfo> found = new ArrayList<>(pm.queryIntentActivities(probe, 0));
+        // A phone-only app named in dock_apps (e.g. the phone Play Store some boxes ship) has no leanback
+        // entry; take its ordinary launcher activity instead. Apps not named stay hidden.
+        Set<String> listed = new HashSet<>();
+        for (ResolveInfo ri : found) if (ri.activityInfo != null) listed.add(ri.activityInfo.packageName);
+        for (String pkg : favourites) {
+            if (listed.contains(pkg)) continue;
+            Intent phone = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(pkg);
+            List<ResolveInfo> more = pm.queryIntentActivities(phone, 0);
+            if (!more.isEmpty() && more.get(0).activityInfo != null) {
+                found.add(more.get(0));
+                listed.add(pkg);
+            }
+        }
         // The install path moves when an app is updated, so it stands in for the version: an update
         // that brought a new banner still gets a rebuild.
         List<String> parts = new ArrayList<>();
