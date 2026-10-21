@@ -15,19 +15,19 @@ every week.
 
 ## What you get
 
-- **Places to visit that renew themselves.** Once a week the TV takes the pictures Bing has shown on its home
-  page over the past days — landmarks, landscapes, wildlife — deletes last week's and rotates through them,
-  dimmed so the clock and tiles stay readable. The shelf above the dock names each one, its country and a few
-  lines about it. Pictures with people in them are skipped: by the words in their caption, and by Android's
-  own face detector on the TV. No key, no account, nothing to set up.
-- **Rotating wallpapers of your own** instead, with `"places": false`: put pictures in a theme's `wallpapers/`
-  folder and choose how often they change, down to every 5 seconds. Each picture is decoded in the background
-  and cross-faded.
+- **Keeps itself clean.** Every 15 days, while Home sits idle, the TV clears its app caches, where the Play
+  Store leaves gigabytes of download leftovers that can make apps open to a blank screen. No computer needed,
+  sign-ins and app data are never touched; the TV asks once to allow it.
 - **Glass, like Apple's.** The dock's tray, the top-bar buttons and the menus show the picture behind them
   softened, with a shine along their edges. Android 10 has no live blur, so the picture is blurred once each
   time it changes and the glass draws its patch of it.
 - **One selection that glides.** Between apps it is a pane of glass with the app's shadow under it; on the top
   bar and in the menus it is dark. It glides and changes shape from one to the next, never jumps.
+- **Places to visit that renew themselves.** Once a week the TV takes the pictures Bing has shown on its home
+  page over the past days — landmarks, landscapes, wildlife — deletes last week's and rotates through them,
+  dimmed so the clock and tiles stay readable. The shelf above the dock names each one, its country and a few
+  lines about it. Pictures with people in them are skipped: by the words in their caption, and by Android's
+  own face detector on the TV. No key, no account, nothing to set up.
 - **Every app tints the room.** The glow behind Home, and the glass with it, blends to the colour of whichever
   app is selected.
 - **Arrange your apps from the remote.** Hold OK on an app for a glass menu with **Move** and **App info**.
@@ -38,13 +38,13 @@ every week.
 - **Comes back as you left it.** Back from an app, the app you left is still selected; pressing Home on Home
   goes to the first app. When Android has closed Home to free memory, it comes back whole in one frame,
   with no black screen and no half-built dock.
-- **Keeps itself clean.** Every 15 days, while Home sits idle, the TV clears its app caches, where the Play
-  Store leaves gigabytes of download leftovers that can make apps open to a blank screen. No computer needed,
-  sign-ins and app data are never touched; the TV asks once to allow it.
 - **A clock screensaver.** A grey analog dial with a yellow-orange second hand that ticks, the time and
   date beneath, drifting a little each minute so nothing burns in.
 - **Rows feather out under the top bar** instead of being cut off when you scroll, and the Wi-Fi / Ethernet
   button can be hidden (`show_network_pill`).
+- **Rotating wallpapers of your own** instead, with `"places": false`: put pictures in a theme's `wallpapers/`
+  folder and choose how often they change, down to every 5 seconds. Each picture is decoded in the background
+  and cross-faded.
 
 | | |
 |---|---|
