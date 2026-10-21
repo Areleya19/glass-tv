@@ -7,7 +7,8 @@
 -->
 <resources>
 
-    <!-- Apps pinned to the dock row at the bottom, in this order. Missing apps are skipped. -->
+    <!-- Apps pinned to the dock row at the bottom, in this order. Missing apps are skipped. A phone-only app
+         (no leanback entry) shows only when it is listed here. -->
     <string-array name="dock_apps">
         <item>com.google.android.youtube.tv</item>
         <item>in.startv.hotstar.dplus.tv</item>
