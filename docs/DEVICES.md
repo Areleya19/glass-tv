@@ -14,6 +14,12 @@ of daily use and stress tests:
 |---|---|---|
 | Xiaomi Mi TV (MiTV-MOOQ0, croods) | Android TV 10 | [`xiaomi-mitv-mooq0`](../examples/xiaomi-mitv-mooq0/) |
 
+Also run with Glass TV by others, for the parts they checked:
+
+| Device | System | Checked | Report |
+|---|---|---|---|
+| Toshiba TV with MIC (Hisense-made, `songshan`, MediaTek) | Google TV, Android 11 | Installed from Windows, became Home, Input button; the accessibility helpers are cleared on every boot on this firmware | [#4](https://github.com/cocombee/glass-tv/issues/4) |
+
 ## 2. Tested with the original launcher
 
 Contributors debloated these and made the original [Clean Your TV](https://github.com/Gathin23/cleanyourtv)
