@@ -91,7 +91,8 @@ function Restore-Tv {
 # Glass TV in front, and the same process a few seconds later (not crashing and restarting).
 function Test-Healthy([string]$Stage) {
     if ($env:SAFEGUARD_TEST -eq $Stage) { return $false }
-    $s = "$(& $py -I ..\tools\tv.py 'sleep 4; a=$(pidof com.gathin.tvhome); sleep 3; b=$(pidof com.gathin.tvhome); f=$(dumpsys window 2>/dev/null | grep -m1 mCurrentFocus); echo "$a|$b|$f"' | Select-Object -Last 1)".Trim()
+    # Sent on stdin: Windows PowerShell 5.1 drops the inner double quotes from native arguments (#4).
+    $s = "$('sleep 4; a=$(pidof com.gathin.tvhome); sleep 3; b=$(pidof com.gathin.tvhome); f=$(dumpsys window 2>/dev/null | grep -m1 mCurrentFocus); echo "$a|$b|$f"' | & $py -I ..\tools\tv.py --batch | Select-Object -Last 1)".Trim()
     $p = $s.Split('|', 3)
     return ($p.Count -eq 3 -and $p[0] -and $p[0] -eq $p[1] -and $p[2] -like '*com.gathin.tvhome*')
 }
@@ -130,7 +131,8 @@ try {
 # Optional accessibility services, appended to enabled_accessibility_services without dropping others.
 function Enable-Service([string]$Name) {
     $svc = "com.gathin.tvhome/.$Name"
-    & $py -I ..\tools\tv.py ('s=$(settings get secure enabled_accessibility_services); case "$s" in *' + $Name + '*) ;; null|"") settings put secure enabled_accessibility_services ' + $svc + ' ;; *) settings put secure enabled_accessibility_services "$s:' + $svc + '" ;; esac; settings put secure accessibility_enabled 1; echo ' + $Name + ' enabled')
+    # On stdin, like Test-Healthy: the quotes in this command would not survive PowerShell 5.1 as an argument.
+    ('s=$(settings get secure enabled_accessibility_services); case "$s" in *' + $Name + '*) ;; null|"") settings put secure enabled_accessibility_services ' + $svc + ' ;; *) settings put secure enabled_accessibility_services "$s:' + $svc + '" ;; esac; settings put secure accessibility_enabled 1; echo ' + $Name + ' enabled') | & $py -I ..\tools\tv.py --batch | Select-Object -Last 1
 }
 if ($InputKeyService) { Enable-Service 'InputKeyService' }
 if ($HomeKeyService) { Enable-Service 'HomeKeyService' }

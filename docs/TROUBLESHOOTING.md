@@ -98,6 +98,12 @@ fails on purpose and the rollback is printed instead of run.
 
 ## Accessibility helper enabled but the remote button does nothing
 
+- **The helper is switched off again after every reboot**, seen on a Toshiba Google TV made by Hisense
+  (`songshan`, Android 11, #4): at boot the firmware logs `Ignoring non-encryption-aware service` for
+  `InputKeyService` and `HomeKeyService` and clears `enabled_accessibility_services`. On that TV the remote's
+  Input button worked without the helper, so nothing was needed. Where you do need it, run the install
+  script again with the flag after a reboot.
+
 The optional `HomeKeyService` and `InputKeyService` only filter remote keys once Android has bound to
 them. The installer's `enabled` message means the setting was written, not that the service is bound.
 Read the state without changing anything:
