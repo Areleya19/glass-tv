@@ -17,6 +17,13 @@ I want to debloat my Android TV and replace its launcher with a clean Apple TV s
 My TV model is: <MODEL NAME HERE>. Work on the real device, step by step, and verify everything you
 do with screenshots pulled from the TV. Ask me before anything that depends on my preferences.
 
+Check the model first
+- Before connecting or downloading anything, check my model: does it run Android TV or Google TV, Android 8
+  or newer? If it runs Samsung Tizen, LG webOS, Hisense VIDAA, Roku, Vizio, Fire OS or anything else that
+  isn't Android TV, tell me first, plainly, that the launcher can't be installed on it (Fire TV: debloat
+  only), suggest a Google TV stick in its HDMI port instead, and stop until I decide.
+- Look up where developer settings are on my exact model before telling me what to press.
+
 Connect
 - Find the TV on my network (hostname, ARP table, or ask me for the IP) and connect over ADB on port 5555.
 - If the stock adb binary fails with "No route to host" on macOS even though the port is open, that is

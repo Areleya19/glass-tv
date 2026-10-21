@@ -5,6 +5,20 @@ this launcher as the home screen, with pictures of places behind it; on LG webOS
 AI model, large or small. Follow it in order, and read [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 before you improvise a fix.
 
+## First: check the model, before anything else
+
+As soon as you know the TV's or box's brand and model (the person names it, or it is on a photo or sticker),
+check it **before** connecting, asking for an IP address, downloading tools or touching any setting:
+
+1. Look it up in [docs/DEVICES.md](docs/DEVICES.md) and the table below.
+2. If it is **not supported** (Samsung Tizen, Hisense or Toshiba VIDAA, Roku, Vizio, Panasonic My Home Screen,
+   Apple TV, an older unifi IPTV box), or only partly (Fire TV and the debloat-only models: no Glass TV Home;
+   LG webOS: only an app you open), say so **first**, in plain words, before any setup step. For example:
+   "Your Samsung QN90B runs Tizen, so Glass TV can't run on it. A Google TV stick in its HDMI port gives you
+   all of it." Then stop, unless they choose the box or the partial option.
+3. If you don't know whether the model runs Android TV, find out first (the About screen, the maker's spec
+   page). Never start a setup "to see if it works".
+
 ## Which Glass TV to install
 
 Ask the person for the TV's brand and model, and what the Settings → About screen says. It is the operating
@@ -18,6 +32,9 @@ system that matters, not the brand: Hisense, Panasonic, Toshiba, TCL and Philips
 | Fire TV (Amazon sticks, Fire TV Edition TVs) | Debloat only: Fire OS takes Home back from any other launcher | Steps 1 to 3, then step 7 |
 | **LG (webOS)** | **The webOS app** (preview): an app you open, not the home screen; no debloat, no cache cleaning | [webos/README.md](webos/README.md) only. Not these steps: they are for Android |
 | Samsung (Tizen), Roku, VIDAA, Vizio SmartCast, Panasonic My Home Screen, Apple TV | Nothing: these cannot run any version | Stop |
+
+[docs/DEVICES.md](docs/DEVICES.md) says how far each model has been tested; tell the person which section their
+model is in, and don't promise more than that.
 
 How to tell them apart:
 - **Android**: About shows "Android TV OS" or an Android version, or the setup connects with `tools/tv.py

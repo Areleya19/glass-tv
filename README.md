@@ -81,6 +81,12 @@ Glass TV clears the TV's caches by itself every 15 days ([how](docs/cache-clean.
 from one computer instead, [`tools/cache-clean.sh`](docs/cache-clean.md) finds the TVs on your network and
 clears their caches, leaving sign-ins and app data untouched.
 
+## Which TVs work
+
+Android TV and Google TV, Android 8 or newer, on the TV or on a box plugged into any TV.
+[docs/DEVICES.md](docs/DEVICES.md) lists every tested model and how far each was tested: end to end with
+Glass TV, with the original launcher, or debloat only, plus what is expected to work and what cannot.
+
 ## LG and Samsung TVs
 
 LG TVs run webOS and Samsung TVs run Tizen; neither can run Android apps, and neither lets any app replace its
