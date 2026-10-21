@@ -50,6 +50,19 @@ fails on purpose and the rollback is printed instead of run.
   and a [Sony KDL-49W800G](https://github.com/Gathin23/cleanyourtv/issues/92). Press Home before
   `screencap`. An empty capture means nothing about the ADB connection or playback; check those
   separately.
+- **Home goes back to the TV's own home screen**, most often after Glass TV was installed by hand (an APK
+  sideloaded, then picked as the default in Android's "Select a Home app" dialog). That only sets a
+  preference, and Android drops it whenever the list of home apps changes: a system update, an update of
+  the TV's own launcher, a reboot on some firmware. What keeps Glass TV as Home is disabling the stock
+  launcher, which is what `launcher/build-and-install.sh` does: it starts Glass TV first, checks it runs,
+  then disables the stock launcher with `pm disable-user` (reversible, never uninstalled) and puts
+  everything back if anything fails. If Home has gone back:
+  - Run the install script again; it finds the stock launcher and disables it.
+  - On Google TV, also disable `com.google.android.tungsten.setupwraith` (below), or it takes Home.
+  - A firmware update can re-enable the stock launcher; the script fixes that too.
+  - If Home opens the TV's app list instead (some Xiaomi sticks send ALL_APPS for Home), install with
+    `HOME_KEY_SERVICE=1`.
+  - To go back to the TV's own home screen on purpose: `tools/restore.sh <your debloat list>`.
 - **Disable the stock launcher only after the new one is installed**, or the Home button lands on
   a factory test app. Launch the replacement by hand first. `set-home-activity` can report
   `Success` while HOME still resolves to the stock launcher (priority 2) until that one is disabled.
