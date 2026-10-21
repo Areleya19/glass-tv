@@ -48,10 +48,10 @@ every week.
 
 | | |
 |---|---|
-| ![The app grid scrolled up, rows feathering out under the top bar](docs/screenshots/grid.jpg) | ![The Inputs menu with outline HDMI icons](docs/screenshots/inputs.jpg) |
-| *The grid, feathering out under the top bar* | *Inputs: HDMI 1–3, AV and Live TV* |
-| ![Home screen with a night-sky wallpaper of your own](docs/screenshots/home-night-sky.jpg) | |
-| *Your own wallpaper, with the network button hidden* | |
+| ![Home with Mount Sneffels behind the apps, its name, country and story above the glass dock](docs/screenshots/home.jpg) | ![The app grid scrolled down over the Chauvet cave, rows feathering out under the top bar](docs/screenshots/grid.jpg) |
+| *Home, with this week's place* | *Every app, feathering out under the top bar* |
+| ![The glass Inputs menu with HDMI 1 selected](docs/screenshots/inputs.jpg) | ![The clock screensaver: a grey analog dial, the time and the date](docs/screenshots/clock.jpg) |
+| *Inputs, in glass* | *The clock screensaver* |
 
 Still light: on a Xiaomi Mi TV with 1.8 GB of RAM the launcher uses about 80–100 MB and stays there over hours
 of use, one wallpaper is in memory at a time, the week's places take about 2 MB of storage, and nothing runs
