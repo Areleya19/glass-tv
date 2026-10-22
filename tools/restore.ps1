@@ -1,10 +1,12 @@
 # Windows version of restore.sh: re-enable every package listed in a debloat file, restore the
 # stock launcher as home and reset animation scales. Pass the same list you used with disable.ps1.
 #
-# Usage: tools\restore.ps1 -TvHost 192.168.1.50 examples\xiaomi-mi-tv-4a\debloat.txt [-Stock stock.launcher.package]
+# Usage: tools\restore.ps1 -TvHost 192.168.1.50 examples\xiaomi-mi-tv-4a\debloat.txt [stock.launcher.package]
+# The stock launcher can follow the list as a plain word, as with restore.sh (the Undo lines in the
+# lists and build-and-install.ps1's advice are written that way), or be named with -Stock / -StockLauncher.
 param(
     [Parameter(Mandatory = $true, Position = 0)][string]$List,
-    [string]$Stock = 'com.google.android.tvlauncher',
+    [Parameter(Position = 1)][Alias('StockLauncher')][string]$Stock = 'com.google.android.tvlauncher',
     [string]$TvHost = $env:TV_HOST
 )
 $ErrorActionPreference = 'Stop'
