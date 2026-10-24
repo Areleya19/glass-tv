@@ -92,7 +92,8 @@ Glass TV, with the original launcher, or debloat only, plus what is expected to 
 LG TVs run webOS and Samsung TVs run Tizen; neither can run Android apps, and neither lets any app replace its
 home screen or the Home button. For the full Glass TV, plug in a Google TV or Android TV box (Chromecast with
 Google TV, Xiaomi Mi Box, NVIDIA Shield): the TV becomes the screen and Glass TV is Home. On LG, a version you
-open as an app is in preview in [webos/](webos/README.md).
+open as an app is in preview in [webos/](webos/README.md). A Samsung version that comes back after Samsung's home is
+planned: see [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Places, or pictures of your own
 
