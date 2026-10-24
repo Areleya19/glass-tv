@@ -175,6 +175,9 @@ Written so that any model can follow it to the letter:
   troubleshooting guide.
 - After the stock launcher is gone, its recommendation services (`tvrecommendations`, `leanbacklauncher*`)
   can be disabled too.
+- The script switches off Android's **High contrast text** if it is on, because it draws a dark outline round
+  all text that looks like a shadow on Glass TV. Ask the person before installing whether they use it to read;
+  if they do, install with `KEEP_HIGH_CONTRAST_TEXT=1` (Windows: `-KeepHighContrastText`).
 - **Check**: the script prints `Home now resolves to com.gathin.tvhome/…` and ends with `Installed. Press Home
   on the remote to see it.` A line starting with `ERROR:` means it stopped and already put the stock launcher
   back; the message says what to do next.

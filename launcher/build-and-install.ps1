@@ -6,11 +6,13 @@
 #        The stock launcher is detected from the TV when -StockLauncher is not given.
 #        [-InputKeyService]   remote's Input button opens the input switcher (Google TV); re-pass on every install
 #        [-HomeKeyService]    remotes whose Home button sends KEYCODE_ALL_APPS (Xiaomi sticks)
+#        [-KeepHighContrastText]  leave Android's High contrast text on (it is switched off otherwise)
 param(
     [string]$TvHost = $env:TV_HOST,
     [string]$StockLauncher = '',
     [switch]$InputKeyService,
-    [switch]$HomeKeyService
+    [switch]$HomeKeyService,
+    [switch]$KeepHighContrastText
 )
 $ErrorActionPreference = 'Stop'
 # Pipe plain UTF-8 to native commands; the default here prepends a BOM that corrupts the first command.
@@ -136,4 +138,14 @@ function Enable-Service([string]$Name) {
 }
 if ($InputKeyService) { Enable-Service 'InputKeyService' }
 if ($HomeKeyService) { Enable-Service 'HomeKeyService' }
+# High contrast text outlines every letter in a dark border; over Glass TV's photos it reads as a drop shadow.
+# Switched off here, and said so, unless -KeepHighContrastText. Settings > Accessibility turns it back on.
+if (-not $KeepHighContrastText) {
+    $hc = "$(& $py -I ..\tools\tv.py 'settings get secure high_text_contrast_enabled' | Select-Object -Last 1)".Trim()
+    if ($hc -eq '1') {
+        & $py -I ..\tools\tv.py 'settings put secure high_text_contrast_enabled 0' | Out-Null
+        Write-Host 'High contrast text was on (it outlines all text in a dark border), so it was switched off. If you'
+        Write-Host 'need it to read, switch it back on in Settings > Accessibility, or install with -KeepHighContrastText.'
+    }
+}
 Write-Host 'Installed. Press Home on the remote to see it.'

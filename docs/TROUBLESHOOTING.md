@@ -63,6 +63,12 @@ fails on purpose and the rollback is printed instead of run.
   - If Home opens the TV's app list instead (some Xiaomi sticks send ALL_APPS for Home), install with
     `HOME_KEY_SERVICE=1`.
   - To go back to the TV's own home screen on purpose: `tools/restore.sh <your debloat list>`.
+- **A dark outline or drop shadow under the clock, date and place names** on some TVs: Android's
+  **High contrast text** is on (Settings > Accessibility). It outlines every letter in every app, and over
+  Glass TV's photos it looks like a shadow. Glass TV adds none and cannot override it. The install script
+  switches it off (and says so) unless `KEEP_HIGH_CONTRAST_TEXT=1` (Windows: `-KeepHighContrastText`); on a
+  TV set up earlier: `tools/tv.py 'settings put secure high_text_contrast_enabled 0'`, or switch it off in
+  Settings > Accessibility. Leave it on for anyone who needs it to read.
 - **Disable the stock launcher only after the new one is installed**, or the Home button lands on
   a factory test app. Launch the replacement by hand first. `set-home-activity` can report
   `Success` while HOME still resolves to the stock launcher (priority 2) until that one is disabled.

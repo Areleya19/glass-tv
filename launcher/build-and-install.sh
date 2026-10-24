@@ -173,10 +173,23 @@ ARMED=0
 #                         app; Google TV needs this once the stock launcher is gone (InputKeyService)
 #   HOME_KEY_SERVICE=1    remotes whose Home button sends KEYCODE_ALL_APPS instead of HOME, e.g. Xiaomi
 #                         sticks: the key is routed to the launcher (HomeKeyService)
+#   KEEP_HIGH_CONTRAST_TEXT=1  leave Android's High contrast text on (it is switched off otherwise, below)
 enable_service() {   # appends to enabled_accessibility_services without dropping other services
   svc=com.gathin.tvhome/.$1
   "$PY" -I ../tools/tv.py "s=\$(settings get secure enabled_accessibility_services); case \"\$s\" in *$1*) ;; null|'') settings put secure enabled_accessibility_services $svc ;; *) settings put secure enabled_accessibility_services \"\$s:$svc\" ;; esac; settings put secure accessibility_enabled 1; echo $1 enabled"
 }
 if [ "${INPUT_KEY_SERVICE:-0}" = 1 ]; then enable_service InputKeyService; fi
 if [ "${HOME_KEY_SERVICE:-0}" = 1 ]; then enable_service HomeKeyService; fi
+
+# High contrast text, an Android accessibility setting, draws a dark outline round every letter in every
+# app; over Glass TV's photos it reads as a drop shadow under the clock, date and place names. It is
+# switched off here, and said so, unless KEEP_HIGH_CONTRAST_TEXT=1. Settings > Accessibility turns it back on.
+if [ "${KEEP_HIGH_CONTRAST_TEXT:-0}" != 1 ]; then
+  HC=$("$PY" -I ../tools/tv.py 'settings get secure high_text_contrast_enabled' | tail -n 1 | tr -d '\r ') || HC=""
+  if [ "$HC" = 1 ]; then
+    "$PY" -I ../tools/tv.py 'settings put secure high_text_contrast_enabled 0' >/dev/null &&
+      echo "High contrast text was on (it outlines all text in a dark border), so it was switched off. If you" &&
+      echo "need it to read, switch it back on in Settings > Accessibility, or install with KEEP_HIGH_CONTRAST_TEXT=1."
+  fi
+fi
 echo "Installed. Press Home on the remote to see it."
